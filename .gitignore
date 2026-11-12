@@ -8,6 +8,7 @@ node_modules/
 /www/
 /capacitor.js
 /capacitor.js.map
+/voice-account-build.zip
 
 # Android local state, generated assets and build artifacts
 /android/.gradle/

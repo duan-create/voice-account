@@ -270,3 +270,120 @@ SDK、缓存、调试密钥、临时文件和 APK 留在本机，不纳入 Git�
 [SDK Manager](https://developer.android.com/studio/intro/update#sdk-manager)、
 [AGP 8.13 工具链说明](https://developer.android.com/build/releases/past-releases/agp-8-13-0-release-notes)、
 [构建和运行应用](https://developer.android.com/studio/run)。
+
+## 云端打包 APK 操作步骤
+
+### 配置与上传包
+
+入口：[VoltBuilder 上传页面](https://volt.build/upload/)。使用账号登录，确认当前套餐支持
+Capacitor Android Debug 构建；额度、费用和可用工具链以平台当时的说明为准。
+本地不需要 Android SDK、Android Studio 或有效的 `JAVA_HOME`。
+
+根目录 `voltbuilder.json` 使用平台官方 Capacitor 配置字段：
+
+```json
+{
+  "androidPackageType": "apk",
+  "release": "debug",
+  "capacitor": { "jvm_21": true }
+}
+```
+
+应用名称 `语音记账` 与包名 `com.duancreate.voiceaccount` 继续从
+`capacitor.config.json` 的 `appName` / `appId` 读取，不在 VoltBuilder 配置里添加
+未定义的 `name`、`packageName` 或 `buildType` 字段。平台通过上传页面的 **Android**
+按钮选择，不用新增 iOS 工程。Debug 使用平台默认调试签名，不提供 keystore、别名、密码
+或商店凭据，也不创建 `certificates/`。`apk` 是可直接安装的包，不是 AAB。
+
+生成或更新上传包，在项目根目录运行：
+
+```powershell
+pwsh -NoProfile -File .\scripts\package-voltbuilder.ps1
+```
+
+需要 Node.js 22+、PowerShell 和已安装的项目 npm 依赖；缺少依赖时先运行 `npm.cmd ci`。
+脚本只准备网页文件并压缩，不下载 SDK、不运行 Gradle。输出覆盖同名旧上传包：
+`D:\app开发\voice-account-build.zip`。ZIP 已被 Git 忽略，不提交生成的压缩包。
+
+ZIP 根目录直接包含以下内容，不嵌套额外项目文件夹：
+
+```text
+capacitor.config.json
+voltbuilder.json
+package.json
+package-lock.json
+README.md
+index.html / manifest.json / sw.js / capacitor.js / capacitor.js.map
+css/ / js/ / www/
+scripts/prepare-web.cjs
+scripts/configure-cloud-android.cjs
+```
+
+所有页面、样式、业务模块和第三方中文数字库及其许可证保持原样，`www/` 是最新资源副本。
+不上传 `.git/`、`node_modules/`、`android/`、本机 JDK/SDK 路径、签名文件、测试、旧设计文档、
+缓存或构建产物。它们在本地仍有开发用途，不以“清理上传包”为由删除源码或 Git 历史。
+
+### 不上传原生工程时的权限处理
+
+VoltBuilder 官方支持缺少 `android/` 时生成原生工程。上传副本的 `package.json` 增加
+网页 `build` 和 Capacitor `copy:after` / `update:after` 构建钩子；本地根目录的
+`package.json`、锁文件和现有安卓工程保持不变。
+钩子通过 Capacitor CLI 自带的 XML 解析器，为云端新生成的 Manifest 补齐
+`INTERNET`、`RECORD_AUDIO`、`MODIFY_AUDIO_SETTINGS`，并把麦克风硬件设为可选。
+不会添加全盘存储权限，也不会写入本机的 `org.gradle.java.home`。
+若平台日志出现 Manifest 配置失败，应停止使用该产物并查看日志，不能忽略权限错误。
+
+当前平台工具链说明包含 JDK 21、SDK Platform 36、Build-Tools 35.0.0 / 36.0.0
+及 Gradle 8.14.3，符合现有 Capacitor 8 工程的主要要求。平台的 Capacitor 文档仍标注
+beta，实际支持状态以当次构建日志为准，不因 ZIP 检查通过就认定云端编译成功。
+
+### 上传、构建与下载
+
+1. 打开上传页面并登录，点击 **Android** 选择 `voice-account-build.zip`，或拖到 Android
+   上传区域。只上传这个干净 ZIP，不要将整个仓库另行压缩，也不上传含个人账单的备份文件。
+   上传会把工程源码交给第三方服务处理，请先确认平台条款和账号额度。
+2. 等待平台安装 npm 依赖、生成原生工程、同步资源并构建 Debug APK。
+   不要选择 Release / Bundle / Google Play 发布。保留构建 ID 和日志；失败时通过
+   `View Log` 查看原因，不把旧的成功记录当作本次结果。
+3. 成功后，在同一上传页面的构建结果区点击 **Download** 下载 APK；也可使用结果页面提供的
+   设备链接或二维码。云端下载 URL 由平台生成，没有固定的本机 `android/app/build/` 路径。
+   电脑通常保存在浏览器下载目录，例如 `C:\Users\Lenovo\Downloads`，名称以实际下载为准。
+   不假设平台链接长期有效，及时保留 APK 和本次日志。
+4. 将下载的 APK 传到手机，或在手机打开结果链接下载；用文件管理器打开 APK，按提示允许
+   该来源“安装未知应用”。安装完成后可关闭此权限，不需要连接开发电脑或本地 SDK。
+
+### 覆盖更新与功能验证
+
+覆盖安装需要相同包名、兼容版本号和**相同签名证书**。平台默认 Debug 签名不保证与本地
+Android Studio 的 Debug 签名相同，也不在此承诺不同云端构建始终使用同一证书。
+遇到签名冲突不要直接卸载：卸载或清除应用数据会删除本地账本，先确认备份实际存在。
+当前 JSON 导出只包含账单，不包含预算设定，也没有 JSON 导入恢复功能。
+浏览器 PWA 数据与独立 APK 的 WebView 数据不会自动迁移。
+后续正式稳定更新需要单独规划版本号和长期保管的签名，本步不配置 Release 签名。
+
+干净包包含完整离线网页资源、IndexedDB 数据模块、统计和预算模块；打包不会迁移个人数据。
+但配置检查和浏览器测试**不能保证 Android WebView 的全部能力**：
+
+- 语音依赖 Web Speech API 和在线识别服务，Manifest 权限不会给不支持的 WebView 增加该 API。
+  当前实现不支持时提示使用手动记账，本步不引入原生语音插件或修改识别逻辑。
+- JSON 备份使用 Blob 下载，安卓壳中的落盘行为必须真机验证；没有原生文件下载桥接，
+  不能用“导出成功”提示代替检查手机上确实生成了可读取的 JSON 文件。
+- 安装后检查手动新增/编辑/删除、离线重启和数据保留、分类统计、历史月份、预算持久化，
+  以及麦克风允许/拒绝状态。云端构建成功不代表这些项目已经通过真机测试。
+
+本地检查命令：
+
+```powershell
+npm.cmd test
+node --test tests/cloud-android.test.cjs
+npm.cmd exec --yes --package=playwright -- node --test tests/manual-bills.test.cjs
+```
+
+官方参考：[Capacitor 工程和配置](https://volt.build/docs/set_up-capacitor/)、
+[云端工具链](https://volt.build/docs/build-environment/)、
+[上传构建教程](https://volt.build/tutorial/)。本步只准备上传工程，不代用户登录或提交付费构建。
+
+本步验证记录（2026-11-12）：现有单元测试 86/86、云端权限钩子测试 3/3、浏览器回归
+44/44 通过。干净 ZIP 解压后已实际执行 `npm ci --offline`、网页 `build`、
+`cap add android` 和 `cap sync android`，无 SDK 下载或 Gradle 编译；新生成的名称、包名、
+三项权限、可选麦克风声明及 18 个网页资源校验通过。此记录不是云端 APK 构建或真机验收结果。

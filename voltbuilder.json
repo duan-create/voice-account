@@ -1,0 +1,7 @@
+{
+  "androidPackageType": "apk",
+  "release": "debug",
+  "capacitor": {
+    "jvm_21": true
+  }
+}

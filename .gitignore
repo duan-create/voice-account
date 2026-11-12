@@ -23,6 +23,10 @@ node_modules/
 /android/app/src/main/assets/capacitor.config.json
 /android/app/src/main/assets/capacitor.plugins.json
 /android/capacitor-cordova-android-plugins/
+/android/app/src/main/assets/models/*.bin
+/android/app/src/main/cpp/third_party/
+/android/app/.cxx/
+/android/app/.externalNativeBuild/
 *.apk
 *.aab
 *.apks

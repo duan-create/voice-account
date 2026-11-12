@@ -1,5 +1,6 @@
 import { initDB, addBill, getBills, updateBill, deleteBill, getMonthSummary } from "./db.js";
 import { setupVoiceInput } from "./voice.js";
+import { isAndroidNative } from "./native-voice.js";
 import { categoryFor } from "./finance.js";
 import { setupFinanceUI } from "./finance-ui.js";
 import { animateAmount, stopAmountAnimation, requestDelete, fitAmount } from "./ui.js";
@@ -27,6 +28,7 @@ let voiceActive = false;
 let toastTimer;
 let currentDay = localDate();
 let refreshInProgress = false;
+const voiceAvailable = () => isAndroidNative() || navigator.onLine;
 const finance = setupFinanceUI({ showMessage, updateDialogViewport });
 
 function fitSummaryAmounts() {
@@ -69,7 +71,7 @@ function showMessage(message, error = false) {
 function setBusy(value) {
   busy = value;
   manualButton.disabled = value || !ready || voiceActive;
-  voiceButton.disabled = value || !ready || !navigator.onLine;
+  voiceButton.disabled = value || !ready || !voiceAvailable();
   exportButton.disabled = value || !ready || voiceActive;
   fields.namedItem("form-fields").disabled = value;
   list.querySelectorAll("button").forEach((button) => { button.disabled = value || !ready || voiceActive; });
@@ -179,7 +181,7 @@ function openForm(bill = null) {
 setupVoiceInput({
   button: voiceButton,
   status: voiceStatus,
-  isAvailable: () => navigator.onLine && ready && !busy && !document.querySelector("dialog[open]"),
+  isAvailable: () => voiceAvailable() && ready && !busy && !document.querySelector("dialog[open]"),
   setActive(active) {
     voiceActive = active;
     setBusy(busy);
@@ -200,10 +202,10 @@ setupVoiceInput({
 });
 
 function updateConnection() {
-  if (!navigator.onLine && voiceActive) voiceButton.dispatchEvent(new Event("pointercancel"));
-  voiceButton.hidden = !navigator.onLine;
-  voiceStatus.hidden = !navigator.onLine;
-  offlineStatus.hidden = navigator.onLine;
+  if (!voiceAvailable() && voiceActive) voiceButton.dispatchEvent(new Event("pointercancel"));
+  voiceButton.hidden = !voiceAvailable();
+  voiceStatus.hidden = !voiceAvailable();
+  offlineStatus.hidden = voiceAvailable();
   setBusy(busy);
 }
 

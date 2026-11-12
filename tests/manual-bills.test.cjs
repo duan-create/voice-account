@@ -15,7 +15,7 @@ let origin;
 const root = join(__dirname, "..");
 
 before(async () => {
-  const files = new Set(["index.html", "capacitor.js", "css/style.css", "js/app.js", "js/ui.js", "js/db.js", "js/db.selftest.js", "js/budget-db.js", "js/finance.js", "js/finance-ui.js", "js/charts.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "manifest.json", "sw.js"]);
+  const files = new Set(["index.html", "capacitor.js", "css/style.css", "js/app.js", "js/ui.js", "js/db.js", "js/db.selftest.js", "js/budget-db.js", "js/finance.js", "js/finance-ui.js", "js/charts.js", "js/voice.js", "js/native-voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "manifest.json", "sw.js"]);
   const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json" };
   server = createServer(async (request, response) => {
     const path = new URL(request.url, "http://localhost").pathname.slice(1) || "index.html";
@@ -133,6 +133,97 @@ async function holdVoice() {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
 }
+
+async function installNativeVoice({ denied = false, delayed = false } = {}) {
+  await page.route('**/capacitor.js', (route) => route.fulfill({ contentType: 'text/javascript', body: `
+    const listeners = new Set();
+    window.nativeCalls = [];
+    window.nativeVoice = {
+      addListener: async (_, callback) => { listeners.add(callback); return { remove: async () => listeners.delete(callback) }; },
+      startRecording: async (options) => {
+        window.nativeCalls.push(['start', options]);
+        if (${denied}) throw Object.assign(new Error('denied'), {code: 'PERMISSION_DENIED'});
+        if (${delayed}) await new Promise((resolve) => { window.allowNative = resolve; });
+      },
+      stopRecordingAndRecognize: (options) => {
+        window.nativeCalls.push(['stop', options]);
+        return new Promise((resolve) => { window.nativeResult = (text) => resolve({text}); });
+      },
+      cancelRecording: async (options) => { window.nativeCalls.push(['cancel', options]); }
+    };
+    window.nativeAutoStop = () => listeners.forEach((listener) => listener({sessionId: window.nativeCalls[0][1].sessionId}));
+    window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', registerPlugin: () => window.nativeVoice };
+    window.SpeechRecognition = class { constructor() { throw new Error('Native must never use web recognition'); } };
+  ` }));
+  await page.reload();
+  await waitForReady();
+}
+
+test('Android voice remains available offline, fills the original form and saves only after confirmation', async () => {
+  await installNativeVoice();
+  await context.setOffline(true);
+  await page.waitForFunction(() => !navigator.onLine);
+  assert.equal(await page.locator('.voice-button').isVisible(), true);
+  assert.equal(await page.locator('.voice-button').isEnabled(), true);
+  await holdVoice();
+  await page.waitForFunction(() => document.querySelector('.voice-button').dataset.state === 'recording');
+  await page.mouse.up();
+  await page.waitForFunction(() => typeof window.nativeResult === 'function');
+  await page.evaluate(() => window.nativeResult('中午吃面花了二十八块'));
+  await page.locator('#bill-dialog[open]').waitFor();
+  assert.equal(await page.getByLabel('金额（元）').inputValue(), '28');
+  assert.equal(await page.getByLabel('分类', {exact: true}).inputValue(), '餐饮');
+  assert.deepEqual(await readBills(), []);
+  await save();
+  assert.equal((await readBills())[0].amount, 28);
+});
+
+test('Android automatic silence and permission rejection restore manual entry without saving', async () => {
+  await installNativeVoice();
+  await holdVoice();
+  await page.waitForFunction(() => document.querySelector('.voice-button').dataset.state === 'recording');
+  await page.evaluate(() => window.nativeAutoStop());
+  await page.waitForFunction(() => typeof window.nativeResult === 'function');
+  await page.evaluate(() => window.nativeResult(''));
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector('.voice-button').dataset.state === 'idle');
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  await installNativeVoice({denied: true});
+  await holdVoice();
+  await page.mouse.up();
+  await page.waitForFunction(() => document.querySelector('#voice-status').textContent.includes('权限'));
+  assert.equal(await page.locator('.manual-button').isEnabled(), true);
+  assert.deepEqual(await readBills(), []);
+});
+
+test('Android release during permission startup and late result after cancel never double fill', async () => {
+  await installNativeVoice({delayed: true});
+  await holdVoice();
+  await page.mouse.up();
+  await page.waitForFunction(() => typeof window.allowNative === 'function');
+  await page.evaluate(() => window.allowNative());
+  await page.waitForFunction(() => typeof window.nativeResult === 'function');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.evaluate(() => window.nativeResult('收入一百元'));
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.equal(await page.locator('.manual-button').isEnabled(), true);
+  assert.deepEqual(await readBills(), []);
+});
+
+test('Android system permission focus change does not cancel a pending first recording', async () => {
+  await installNativeVoice({delayed: true});
+  await holdVoice();
+  await page.waitForFunction(() => typeof window.allowNative === 'function');
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await page.evaluate(() => window.allowNative());
+  await page.waitForFunction(() => document.querySelector('.voice-button').dataset.state === 'recording');
+  await page.mouse.up();
+  await page.waitForFunction(() => typeof window.nativeResult === 'function');
+  await page.evaluate(() => window.nativeResult('打车花了三十二元'));
+  await page.locator('#bill-dialog[open]').waitFor();
+  assert.equal(await page.getByLabel('金额（元）').inputValue(), '32');
+  assert.deepEqual(await readBills(), []);
+});
 
 test("press/release recognizes Chinese and fills the existing form without saving", async () => {
   await installSpeech();

@@ -1,5 +1,9 @@
 # Voice Account PWA / Android Shell
 
+Android now has a custom offline Whisper plugin. See **Android 端侧离线 Whisper** below:
+building this version additionally requires the prepared model/source, NDK and CMake.
+The older web-only ZIP and Web Speech API notes do not describe the new Android voice path.
+
 The HTML, CSS and JavaScript sources remain in the repository root. There is no
 frontend compiler or bundler.
 
@@ -518,3 +522,150 @@ cd 'D:\app开发\server'
 最终回归：后端 23/23、原有单元测试 86/86、云端配置测试 3/3、浏览器测试 44/44 通过；
 真实模型对静音返回 `422`，未生成识别内容。一键脚本从项目外目录启动及 loopback 监听已验证。
 本次没有修改前端源码或数据库，也没有生成新的 APK 或上传 ZIP。
+
+## Android 端侧离线 Whisper
+
+本节为第十八步的最新安卓语音方案，覆盖前面“安卓仅使用 Web Speech API”及“ZIP 不含原生工程”
+的旧步骤说明。网页 / PWA **仍保持 Web Speech API**，不接入 Python 上传；`server/` 可独立保留，
+安卓识别不启动、不连接它，也不要求同一 Wi-Fi。
+
+### 插件与识别链路
+
+```text
+按住说话（原有样式和操作）
+  -> Capacitor WhisperPlugin
+  -> AudioRecord / 16 kHz / 单声道 / PCM16（内存）
+  -> JNI / whisper.cpp / CPU 本地中文推理
+  -> 原有 parseVoiceBill -> 原有确认表单 -> 用户确认后入账
+```
+
+`MainActivity` 注册自定义插件，Java 单工作线程串行运行模型加载、录音和识别，不阻塞 WebView。
+模型直接从 APK 的 AssetManager 读取，不复制到公共存储，不生成录音文件，不请求任何网络。
+原生接口如下，适配层生成的 `sessionId` 用于丢弃取消后、旧权限回调和旧识别结果：
+
+- `startRecording({ sessionId })`：申请麦克风权限，加载内置模型并开始录音。
+- `stopRecordingAndRecognize({ sessionId })`：停止录音并返回 `{ text: "识别文本" }`；无有效语音返回空字符串。
+- `cancelRecording({ sessionId })`：停止对应录音，协作取消推理并丢弃结果。
+- `recordingStopped` 事件：携带 `sessionId`，通知适配层已达到静音或时长上限。
+
+只在 Capacitor 原生 Android 中选择此插件；插件不可用时提示手动记账，**不偷偷降级联网识别**。
+安卓断网不再隐藏或禁用语音按钮，未准备好数据库、操作繁忙等原有禁用条件仍保留。
+权限被拒、模型加载失败、麦克风错误和设备不兼容均恢复手动入口，不改账单数据。
+首次权限弹窗造成的短暂失焦不会取消启动；开始录音后的失焦、取消手势和进入后台会停止会话。
+
+单条录音最长 30 秒；初始静音约 3 秒、有效声音后连续静音约 1.5 秒自动停止。
+使用 PCM 能量阈值剔除静音和孤立短促噪声，不是能理解语义的 VAD，嘈杂环境可能影响自动停录，
+仍可松手结束。推理强制 `zh`、不翻译、不携带上笔上下文、不修改文本或原有语义解析规则。
+原生推理约 120 秒协作超时，前端原生处理超时约 150 秒，网页保持原来的 15 秒。
+用户必须核对金额、分类和备注；离线和量化不代表零误识别。
+
+### 准备模型与源码
+
+开发机首次执行以下命令，需要联网，但不会下载 Android SDK，也不会编译 APK：
+
+```powershell
+cd 'D:\app开发'
+pwsh -NoProfile -File .\scripts\prepare-android-whisper.ps1
+npx.cmd cap sync android
+```
+
+准备脚本固定官方 `whisper.cpp v1.8.2`，提交
+`4979e04f5dcaccb36057e059bbaed8a2f5288315`，源码包 SHA256：
+`ec8e33f4c838ed459ad0a23da255c0262f150a6f54839a17e504ddf1495305d5`。
+源码位于 `android/app/src/main/cpp/third_party/whisper.cpp/`，不进入 Git，脚本可重复准备。
+不依赖构建时 CMake FetchContent 下载，发布 APK 也不携带下载代码。
+
+模型为**多语言 base 的 Q5_1 量化版**，并非中文专用模型，不能替换成 `base.en` 或 faster-whisper
+使用的 CTranslate2 `model.bin`。内置位置：
+
+```text
+android/app/src/main/assets/models/ggml-base-q5_1.bin
+59,707,625 字节（约 59.7 MB / 56.9 MiB）
+SHA256: 422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898
+```
+
+模型已被 `.gitignore` 排除，克隆仓库后必须重新准备。`-VerifyOnly` 只校验，不联网：
+
+```powershell
+pwsh -NoProfile -File .\scripts\prepare-android-whisper.ps1 -VerifyOnly
+```
+
+Gradle 的 `verifyWhisperAssets` 在构建前检查模型长度、SHA256 和源码版本；缺失会报错，不生成
+看似可用但没有模型的安装包。模型设置为 APK 非压缩资产，通过 JNI 流式读取；首次录音加载到内存，
+后续复用，退出 Activity 后释放。录音及识别文本不写日志、不落盘。
+
+### Android Studio 构建要求
+
+沿用前文 Android Studio 的导入步骤，打开 `D:\app开发\android`，额外在 SDK Manager 中勾选
+**Show Package Details** 并安装：
+
+- Android SDK Platform 36、Build-Tools 36.0.0、Platform-Tools、Command-line Tools。
+- NDK (Side by side) **28.2.13676358**，CMake **3.22.1**。
+- Gradle JDK **21**。本机 `org.gradle.java.home` 仍保留；其他电脑应改为自己的 JDK，不能照用本机路径。
+
+插件通过 CMake 编译 `libvoice_whisper.so`，CPU-only，不需要 CUDA、GPU 或后端 Python。
+支持 `arm64-v8a` 真机与 `x86_64` 模拟器，最低 Android API 24；本版不构建 32 位 ABI，
+32 位专用设备不能安装此 APK。使用基础 ARMv8 指令配置，不强制可选 FP16/dotprod/SVE 指令；
+NDK r28 和链接参数为 16 KiB 内存页提供构建配置，仍需在对应设备验证。
+
+同步成功不等于 C++ 编译成功。准备依赖后，用 Studio 的 **Build > Build Bundle(s) / APK(s) >
+Build APK(s)** 构建 Debug；输出仍为：
+`D:\app开发\android\app\build\outputs\apk\debug\app-debug.apk`。
+模型本身增加约 60MB，最终 APK 还包含两个 ABI 的原生库与网页资源，准确大小以构建产物为准。
+运行需要额外模型及推理内存，低内存设备可能加载失败。冷启动、30 秒录音推理耗时及发热因 CPU
+差异很大，本机没有真机基准，不能承诺秒回或与桌面 Python 后端相同的速度。
+
+### 云端上传包已调整
+
+```powershell
+pwsh -NoProfile -File .\scripts\package-voltbuilder.ps1
+```
+
+脚本先离线验证已准备的模型和源码，再生成根目录 `voice-account-build.zip`。
+与旧版不同，现在 ZIP **保留必要的 `android/` 工程**，包括原生插件、JNI / CMake、构建必需的
+whisper.cpp / ggml 源码及许可证、内置模型和 Gradle Wrapper；根目录仍直接包含项目文件，
+无额外包裹目录。源码中的服务器示例、测试和无关工具不上传。
+不包含 `node_modules/`、`.git/`、Python `server/`、`.venv/`、构建缓存、签名、`local.properties`
+或生成的安卓网页副本；云端 cap sync 从 `www/` 重建网页副本。
+上传副本会移除 `org.gradle.java.home`，本地工程不变。
+
+**云端平台必须支持自定义原生工程、NDK 28.2.13676358 和 CMake 3.22.1。**
+本次未登录 VoltBuilder 或执行云端构建，平台现有套餐、上传大小上限和工具链能否满足要求须以
+实际日志或平台支持为准。不再使用自动重新生成空安卓壳的旧流程，否则会丢失插件。
+不能为适配平台而省略模型，或把 Windows Python 服务打包当成手机离线识别。
+
+### 验证与真机验收
+
+```powershell
+npm.cmd test
+node --test tests/native-voice.test.cjs tests/cloud-android.test.cjs
+npm.cmd exec --yes --package=playwright -- node --test tests/manual-bills.test.cjs
+```
+
+纯 Java 录音缓冲测试无需 SDK（把 JDK 路径替换为本机实际路径）：
+
+```powershell
+& 'C:\Users\Lenovo\.jdks\ms-21.0.12.1\bin\javac.exe' -d .cache/pcm-test android/app/src/main/java/com/duancreate/voiceaccount/PcmCapture.java tests/android/PcmCaptureTest.java
+& 'C:\Users\Lenovo\.jdks\ms-21.0.12.1\bin\java.exe' -cp .cache/pcm-test com.duancreate.voiceaccount.PcmCaptureTest
+```
+
+Android instrumentation 测试 `WhisperAssetsTest` 可在 Studio 连接设备后运行，实际检查 APK 模型哈希、
+原生库链接和模型加载；本机缺少 SDK/NDK 和设备，尚未运行。它也不能替代麦克风真实识别验收：
+
+1. 开启飞行模式并关闭 Wi-Fi，首次冷启动 APK，在无任何后端的情况下授权麦克风、录入中文短句。
+2. 检查 28 元、32.50 元、收入 5000 元等金额，确认前账本不增加，修改并确认后仅写一条。
+3. 检查纯静音、30 秒上限、提前松手、首次拒绝/再次授权、取消、锁屏/后台、连续多次录音。
+4. 检查首次加载与推理耗时、内存和温升，两个 ABI、Android 24+ 与 16 KiB 页设备按实际覆盖记录。
+5. 断网验证手动 CRUD、预算、统计、备份文件实际落盘；备份在 Android WebView 的限制仍需原有真机验收。
+
+本步交付状态是**工程接入与自动化边界验证**，不是“APK 已编译”或“真机完全离线识别通过”。
+模型与源码资源已在本机准备，网页布局、CSS、db.js、预算表、解析规则和保存流程保持不变。
+
+本机回归记录（2026-11-12）：单元测试 94/94（含原生适配边界 8 项），浏览器 48/48，
+云端权限配置 3/3，未改动的 Python 后端 23/23，JDK PCM 缓冲测试通过；`cap sync android`
+成功。浏览器原生测试替换了 Capacitor 插件边界，并非运行了手机 AudioRecord / JNI。
+上传 ZIP 已检查原生源码、模型哈希及本机路径排除，不代表 VoltBuilder 已编译成功。
+
+上游来源：[whisper.cpp v1.8.2](https://github.com/ggml-org/whisper.cpp/tree/v1.8.2)、
+[量化模型](https://huggingface.co/ggerganov/whisper.cpp)、
+[OpenAI Whisper](https://github.com/openai/whisper)。发布时保留相应 MIT 许可证，不承诺模型准确率。

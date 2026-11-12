@@ -1,7 +1,11 @@
 import { parseVoiceBill } from "./voice-parser.js";
+import { createNativeRecognition, isAndroidNative } from "./native-voice.js";
 
 export function setupVoiceInput({ button, status, isAvailable, setActive, onDraft }) {
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const native = isAndroidNative();
+  const Recognition = native
+    ? createNativeRecognition(window.Capacitor.registerPlugin("WhisperPlugin"))
+    : window.SpeechRecognition || window.webkitSpeechRecognition;
   const label = button.querySelector("span");
   let session = null;
 
@@ -39,7 +43,7 @@ export function setupVoiceInput({ button, status, isAvailable, setActive, onDraf
     render("processing", "正在识别，请稍候...");
     // Permission and startup may finish after the user's finger has already lifted.
     if (current.started) current.recognition.stop();
-    current.timer = setTimeout(() => cancel("识别超时，请重试或使用手动记账。"), 15000);
+    current.timer = setTimeout(() => cancel("识别超时，请重试或使用手动记账。"), native ? 150000 : 15000);
   }
 
   function complete(current) {
@@ -55,7 +59,7 @@ export function setupVoiceInput({ button, status, isAvailable, setActive, onDraf
 
   function start() {
     if (session || !isAvailable()) return;
-    if (!Recognition || !window.isSecureContext) {
+    if (!Recognition || (!native && !window.isSecureContext)) {
       render("idle", !Recognition ? "当前浏览器不支持语音识别，请使用手动记账。" : "语音识别需要 HTTPS 或 localhost，请使用手动记账。");
       return;
     }
@@ -66,6 +70,9 @@ export function setupVoiceInput({ button, status, isAvailable, setActive, onDraf
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
+    if (native) recognition.onprocessing = () => {
+      if (session === current) render("processing", "正在识别，请稍候...");
+    };
     recognition.onstart = () => {
       if (session !== current) return;
       current.started = true;
@@ -89,6 +96,9 @@ export function setupVoiceInput({ button, status, isAvailable, setActive, onDraf
         "service-not-allowed": "语音服务权限被拒绝，请使用手动记账。",
         "audio-capture": "未检测到可用麦克风，请检查设备或使用手动记账。",
         "no-speech": "没有听到语音，请重试或使用手动记账。",
+        "model-unavailable": "本地语音模型加载失败，请重新安装完整安装包或使用手动记账。",
+        "unsupported": "当前设备不支持本地语音识别，请使用手动记账。",
+        "native-failed": "本地语音识别失败，请重试或使用手动记账。",
         network: "语音服务连接失败，请检查网络或使用手动记账。"
       };
       status.textContent = errors[event.error] || "语音识别失败，请重试或使用手动记账。";
@@ -132,9 +142,12 @@ export function setupVoiceInput({ button, status, isAvailable, setActive, onDraf
       stop();
     }
   });
-  window.addEventListener("blur", () => cancel());
+  window.addEventListener("blur", () => {
+    // Android's system permission sheet can take focus before recording starts.
+    if (!native || session?.started) cancel();
+  });
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) cancel();
+    if (document.hidden && (!native || session?.started)) cancel();
   });
   render("idle", "");
 }

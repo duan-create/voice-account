@@ -3,6 +3,7 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.duancreate.voiceaccount"
     compileSdk = rootProject.ext.compileSdkVersion
+    ndkVersion "28.2.13676358"
     defaultConfig {
         applicationId "com.duancreate.voiceaccount"
         minSdkVersion rootProject.ext.minSdkVersion
@@ -10,6 +11,10 @@ android {
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        ndk { abiFilters 'arm64-v8a', 'x86_64' }
+        externalNativeBuild {
+            cmake { cppFlags '-O3' }
+        }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -22,7 +27,37 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+    androidResources { noCompress += ['bin'] }
 }
+
+tasks.register('verifyWhisperAssets') {
+    doLast {
+        def model = file('src/main/assets/models/ggml-base-q5_1.bin')
+        if (!model.exists() || model.length() != 59707625L) {
+            throw new GradleException('Bundled Whisper model missing. Run scripts/prepare-android-whisper.ps1.')
+        }
+        def digest = java.security.MessageDigest.getInstance('SHA-256')
+        model.withInputStream { input ->
+            byte[] buffer = new byte[1024 * 1024]
+            int count
+            while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count)
+        }
+        if (digest.digest().encodeHex().toString() != '422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898') {
+            throw new GradleException('Bundled Whisper model checksum mismatch.')
+        }
+        def marker = file('src/main/cpp/third_party/whisper.cpp/voice-account-revision.txt')
+        if (!marker.exists() || marker.text.trim() != '4979e04f5dcaccb36057e059bbaed8a2f5288315') {
+            throw new GradleException('Pinned whisper.cpp source missing. Run scripts/prepare-android-whisper.ps1.')
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn 'verifyWhisperAssets' }
 
 repositories {
     flatDir{

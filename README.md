@@ -387,3 +387,134 @@ npm.cmd exec --yes --package=playwright -- node --test tests/manual-bills.test.c
 44/44 通过。干净 ZIP 解压后已实际执行 `npm ci --offline`、网页 `build`、
 `cap add android` 和 `cap sync android`，无 SDK 下载或 Gradle 编译；新生成的名称、包名、
 三项权限、可选麦克风声明及 18 个网页资源校验通过。此记录不是云端 APK 构建或真机验收结果。
+
+## Windows 本地离线语音后端（Python）
+
+本步仅增加 `server/`，不更改前端录音、语音解析、IndexedDB 或记账流程。
+仓库没有已实现的 Node.js 语音后端，因此无需删除旧后端；根目录的 npm 依赖仍用于
+Capacitor 同步、云端打包和测试，不能当作废弃后端移除。
+
+**重要边界：当前页面仍使用原来的 Web Speech API，尚未切换到此接口。**
+后续需单独接入录音上传。服务固定监听电脑的 `127.0.0.1`，不开放局域网或公网。
+手机 APK 中的 `127.0.0.1` 指向手机自身，不能直接调用电脑上的这个服务；本方案不是
+“把 Python 后端打进 APK 就能手机离线识别”，安卓端独立离线识别需另外设计原生集成。
+
+### 工程结构
+
+```text
+server/
+  app.py               Flask 接口、内存解码、模型加载
+  requirements.txt     固定依赖版本（含直接使用的 PyAV、NumPy）
+  start.bat            Windows 一键启动
+  .env.example         可选配置示例
+  .gitignore           排除虚拟环境、模型、缓存、录音、真实环境变量
+  tests/test_app.py    无模型下载的接口与音频处理测试
+  .venv/               本地生成，不提交
+  models/              首次下载的模型，不提交
+```
+
+### 安装与启动
+
+1. 安装 [Windows 版 64 位 Python](https://www.python.org/downloads/windows/)，
+   推荐 **Python 3.13**，安装 Python Launcher。当前固定依赖最低要求 Python 3.12；
+   不使用系统旧版 Python 3.8，不需要安装 Node.js 后端、CUDA、Visual C++ 编译工具或外部 FFmpeg。
+   PyAV 的二进制包已包含解码所需库，CPU / INT8 推理不要求独立显卡。
+2. 双击 `D:\app开发\server\start.bat`。脚本会进入自己的目录，在 `.venv` 安装依赖，
+   不修改全局 Python 环境；使用 `--only-binary=:all:`，没有兼容 wheel 时直接报错，不尝试源码编译。
+   依赖版本已满足时跳过安装，后续启动无需联网安装包。首次依赖安装和模型下载需要联网。
+3. 模型加载完成后，终端出现 `Running on http://127.0.0.1:5000` 才表示接口可用。
+   终端保持打开，按 `Ctrl+C` 停止。端口被占用时修改 `.env` 的 `ASR_PORT`，不要开启公网监听。
+
+也可以在 PowerShell 手动安装和启动：
+
+```powershell
+cd 'D:\app开发\server'
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --only-binary=:all: -r requirements.txt
+.\.venv\Scripts\python.exe app.py
+```
+
+不依赖 PowerShell 虚拟环境激活，不必修改执行策略。如果 Python 是自定义安装，使用其完整
+`python.exe` 路径执行 `-m venv .venv` 即可；本机已用 Python 3.13 创建独立环境。
+
+### 模型与离线模式
+
+默认 `base` 是多语言模型，强制中文 `language="zh"`，默认 CPU / INT8，模型只加载一次，
+识别时使用本地语音活动检测以减少静音幻觉。模型权重约 145 MB，另有分词器、运行依赖和内存开销；
+不以删除必要模型或虚拟环境来节省空间。Windows 不支持符号链接时可能出现 Hugging Face
+缓存提示，不影响识别，也不需要管理员运行。
+
+首次启动会从 Hugging Face 下载公开模型到 `server/models/`，不需要付费 API Key，
+识别没有第三方调用次数限制，但仍受电脑 CPU、内存和本服务请求限制约束。
+**仅模型下载访问第三方，录音和识别文本不发送第三方，不保存在文件或应用日志中。**
+操作系统内存换页不属于应用可保证的内存物理存储范围。
+
+复制配置后，可启用严格本地模式：
+
+```powershell
+Copy-Item .env.example .env
+# 编辑 .env：WHISPER_LOCAL_FILES_ONLY=1
+.\start.bat
+```
+
+`WHISPER_LOCAL_FILES_ONLY=1` 不查询或下载模型，模型尚未准备好则启动失败。
+`WHISPER_MODEL=small` 可换用更大模型，通常更准但更占磁盘且更慢；不要使用只支持英文的 `base.en`。
+若模型下载失败，先检查到 Hugging Face 的网络连接；也可在另一台电脑准备好完整的
+**CTranslate2 格式**模型目录（含 `model.bin`、`config.json`、`tokenizer.json`、词表），
+复制到本机并设置 `WHISPER_MODEL=models/base-local`，不是下载任意 `.pt` 文件即可使用。
+
+### 接口调用
+
+```text
+POST http://127.0.0.1:5000/api/asr
+Content-Type: multipart/form-data
+文件字段：audio（且只能上传一份音频）
+成功：HTTP 200，Content-Type: text/plain; charset=utf-8
+响应示例：今天午饭花了28元
+```
+
+PowerShell 调用示例（使用自己在本机保存的测试录音，不把录音加入 Git）：
+
+```powershell
+curl.exe --fail-with-body -F "audio=@C:\Users\Lenovo\Downloads\recording.webm" http://127.0.0.1:5000/api/asr
+```
+
+后续前端接入时使用 `FormData` 的 `audio` 字段，浏览器自动生成 multipart 边界，
+不要手动设置 `Content-Type`。成功响应使用 `response.text()`，不是 JSON；
+先判断 `response.ok`，不要把错误提示当作识别文本送给记账解析器。
+
+- WebM / Opus 和 WAV 根据真实内容解码，统一为 16 kHz 单声道 float32 后送入模型。
+- 每个文件最多 **5 MiB（5,242,880 字节）**、**30 秒**。请求整体额外预留 64 KiB multipart
+  头部空间，文件上限不因此放宽；逐帧检查实际解码时长，不只信任扩展名或元数据，不截断超时录音。
+- 上传接收、解码和识别全部使用内存，不使用默认的磁盘临时上传文件；请求结束或失败均关闭上传流。
+  一次仅处理一条识别，处理完成释放音频引用，保留模型以便复用。
+- 错误同样返回纯文本：`400` 缺少/错误文件字段，`403` 非许可来源，`413` 超出大小或
+  multipart 限制，`422` 无效/超时音频或未检测到语音，`429` 正在处理其他录音，`503` 模型识别失败。
+  结果和错误均加 `Cache-Control: no-store`。
+- CORS 仅许可 `.env.example` 中列出的本机 HTTP 来源（默认含 8000、8100、5173 端口），
+  未许可的 `Origin` 在识别前拒绝；同时限制 Host 为 `localhost` / `127.0.0.1`，不开启调试器。
+  本机应用仍可无 Origin 调用，这不是面向多用户或不可信本机进程的认证服务。
+- 不支持通配来源或 `file://` 的 `null` 来源。后续网页从其他本机端口打开时，增加对应精确来源；
+  浏览器可能要求本地网络访问许可，HTTPS 页面也可能受混合内容规则限制，不能只靠 CORS 解决。
+
+### 后端验证
+
+```powershell
+cd 'D:\app开发\server'
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m pip check
+```
+
+接口测试使用真实内存 WAV / WebM 编解码，仅将耗时模型推理替换为测试替身，不会下载模型。
+覆盖采样率与声道归一化、边界时长、压缩音频超时、文件大小、内存流关闭、无语音、错误恢复、
+来源限制和并发拒绝。真实模型验收需另用中文录音，不能以接口测试通过代替识别准确率。
+
+本机验证（2026-11-12）：`base` 下载加载成功，并以 `WHISPER_LOCAL_FILES_ONLY=1` 和
+`HF_HUB_OFFLINE=1` 启动，使用 Windows 本地中文合成语音经真实 HTTP 接口识别 3 句，
+28、32、5000 三个金额均正确；“工资”误识别为“公司”，另有繁简混合输出。
+这是合成语音烟雾测试，不是真人、方言、噪声或手机麦克风准确率评测。当前不添加文本纠错、
+繁简转换或业务解析规则，也不自动保存识别结果，接入后仍须用户确认。
+
+最终回归：后端 23/23、原有单元测试 86/86、云端配置测试 3/3、浏览器测试 44/44 通过；
+真实模型对静音返回 `422`，未生成识别内容。一键脚本从项目外目录启动及 loopback 监听已验证。
+本次没有修改前端源码或数据库，也没有生成新的 APK 或上传 ZIP。

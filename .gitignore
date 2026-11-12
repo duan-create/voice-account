@@ -1,6 +1,32 @@
 # Dependencies
 node_modules/
 .pnpm-store/
+.npm/
+.npm-cache/
+
+# Generated Capacitor web assets and runtime (recreated by npm install / cap sync)
+/www/
+/capacitor.js
+/capacitor.js.map
+
+# Android local state, generated assets and build artifacts
+/android/.gradle/
+/android/.kotlin/
+/android/.idea/
+/android/captures/
+/android/local.properties
+/android/**/build/
+/android/.externalNativeBuild/
+/android/.cxx/
+/android/app/src/main/assets/public/
+/android/app/src/main/assets/capacitor.config.json
+/android/app/src/main/assets/capacitor.plugins.json
+/android/capacitor-cordova-android-plugins/
+*.apk
+*.aab
+*.apks
+*.keystore
+*.jks
 
 # Build output and generated PWA files
 dist/

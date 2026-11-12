@@ -1,0 +1,6 @@
+{
+  "appId": "com.duancreate.voiceaccount",
+  "appName": "语音记账",
+  "webDir": "www",
+  "bundledWebRuntime": true
+}

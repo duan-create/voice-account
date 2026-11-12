@@ -15,7 +15,7 @@ let origin;
 const root = join(__dirname, "..");
 
 before(async () => {
-  const files = new Set(["index.html", "css/style.css", "js/app.js", "js/db.js", "js/db.selftest.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "manifest.json", "sw.js"]);
+  const files = new Set(["index.html", "capacitor.js", "css/style.css", "js/app.js", "js/db.js", "js/db.selftest.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "manifest.json", "sw.js"]);
   const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json" };
   server = createServer(async (request, response) => {
     const path = new URL(request.url, "http://localhost").pathname.slice(1) || "index.html";
@@ -81,6 +81,16 @@ test("manual entry opens a form with today's local date; cancel does not write",
   await page.getByRole("button", { name: "取消", exact: true }).click();
   assert.equal(await page.locator("dialog[open]").count(), 0);
   assert.deepEqual(await readBills(), []);
+});
+
+test("the bundled Capacitor runtime loads on the web without changing manual entry", async () => {
+  await waitForReady();
+  assert.equal(await page.evaluate(() => window.Capacitor?.getPlatform()), "web");
+  assert.equal(await page.evaluate(() => typeof window.Capacitor?.registerPlugin), "function");
+  assert.equal(await page.evaluate(() => window.Capacitor?.isNativePlatform()), false);
+  await openForm();
+  await save();
+  assert.equal((await readBills()).length, 1);
 });
 
 // Only the external recognition service is replaced; parsing, UI and IndexedDB stay real.
@@ -433,6 +443,7 @@ test("offline reload serves the full shell and manual CRUD without network", asy
   assert.match(await page.locator("#offline-status").innerText(), /离线.*手动记账/);
   assert.equal(await page.locator(".bill-item").count(), 1);
   assert.equal(await page.locator(".summary-grid").evaluate((element) => getComputedStyle(element).display), "grid");
+  assert.equal(await page.evaluate(() => window.Capacitor?.getPlatform()), "web");
   const parser = await page.evaluate(async () => (await import("./js/voice-parser.js")).parseVoiceBill("吃饭花了二十八块"));
   assert.equal(parser.amount, 28);
   await openForm({ amount: "10", type: "收入" });

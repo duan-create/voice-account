@@ -1,0 +1,21 @@
+{
+  "name": "voice-account-pwa",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Voice accounting PWA with a Capacitor Android shell",
+  "scripts": {
+    "prepare": "node scripts/prepare-web.cjs",
+    "prepare:web": "node scripts/prepare-web.cjs",
+    "capacitor:copy:before": "node scripts/prepare-web.cjs",
+    "sync:android": "cap sync android",
+    "test": "node --test tests/voice-parser.test.cjs tests/prepare-web.test.cjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/core": "8.6.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0"
+  }
+}

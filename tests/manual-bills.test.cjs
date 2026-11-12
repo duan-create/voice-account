@@ -15,7 +15,7 @@ let origin;
 const root = join(__dirname, "..");
 
 before(async () => {
-  const files = new Set(["index.html", "capacitor.js", "css/style.css", "js/app.js", "js/db.js", "js/db.selftest.js", "js/budget-db.js", "js/finance.js", "js/finance-ui.js", "js/charts.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "manifest.json", "sw.js"]);
+  const files = new Set(["index.html", "capacitor.js", "css/style.css", "js/app.js", "js/ui.js", "js/db.js", "js/db.selftest.js", "js/budget-db.js", "js/finance.js", "js/finance-ui.js", "js/charts.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "manifest.json", "sw.js"]);
   const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json" };
   server = createServer(async (request, response) => {
     const path = new URL(request.url, "http://localhost").pathname.slice(1) || "index.html";
@@ -47,6 +47,13 @@ afterEach(async () => { await context?.close(); });
 
 async function waitForReady() {
   await page.waitForFunction(() => !document.querySelector(".manual-button").disabled);
+  await page.waitForFunction(() => !document.querySelector(".summary-amount[data-animating]"));
+}
+
+async function confirmDeletion(button, accept = true) {
+  await button.click();
+  await page.locator("#delete-dialog[open]").waitFor({ timeout: 2000 });
+  await page.locator(accept ? "#confirm-delete" : "#cancel-delete").click();
 }
 
 async function readBills() {
@@ -287,11 +294,9 @@ test("add, reload, edit and delete keep the list and monthly totals consistent",
   assert.equal(await page.locator("#month-income").innerText(), "100.20");
   assert.equal(await page.locator("#month-expense").innerText(), "0.00");
   assert.equal((await readBills())[0].type, "收入");
-  page.once("dialog", (dialog) => dialog.dismiss());
-  await page.getByRole("button", { name: "删除", exact: true }).click();
+  await confirmDeletion(page.getByRole("button", { name: "删除", exact: true }), false);
   assert.equal((await readBills()).length, 1);
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "删除", exact: true }).click();
+  await confirmDeletion(page.getByRole("button", { name: "删除", exact: true }));
   await page.waitForFunction(() => document.querySelectorAll(".bill-item").length === 0);
   assert.match(await page.locator("#app-message").innerText(), /已删除/);
   assert.deepEqual(await readBills(), []);
@@ -387,8 +392,7 @@ test("duplicate submits write once; failed edit and delete leave the bill unchan
   await page.waitForFunction(() => document.querySelector("#form-message").textContent.includes("失败"));
   assert.equal((await readBills())[0].amount, 28.5);
   await page.getByRole("button", { name: "取消", exact: true }).click();
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "删除", exact: true }).click();
+  await confirmDeletion(page.getByRole("button", { name: "删除", exact: true }));
   await page.waitForFunction(() => document.querySelector("#app-message").textContent.includes("失败"));
   assert.equal((await readBills())[0].amount, 28.5);
   assert.match(await page.locator(".bill-item").innerText(), /28\.50/);
@@ -452,8 +456,7 @@ test("offline reload serves the full shell and manual CRUD without network", asy
   await page.getByLabel("金额（元）").fill("12");
   await save();
   assert.equal(await page.locator("#month-income").innerText(), "12.00");
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.locator(".bill-item-income").getByRole("button", { name: "删除" }).click();
+  await confirmDeletion(page.locator(".bill-item-income").getByRole("button", { name: "删除" }));
   await page.waitForFunction(() => document.querySelectorAll(".bill-item").length === 1);
   assert.equal(await page.locator("#month-income").innerText(), "0.00");
   await page.reload();
@@ -462,6 +465,7 @@ test("offline reload serves the full shell and manual CRUD without network", asy
   const offlinePage = await context.newPage();
   assert.equal((await offlinePage.goto(origin)).fromServiceWorker(), true);
   await offlinePage.waitForFunction(() => !document.querySelector(".manual-button").disabled);
+  await offlinePage.waitForFunction(() => !document.querySelector(".summary-amount[data-animating]"));
   assert.equal(await offlinePage.locator("#month-expense").innerText(), "28.50");
   assert.equal(await offlinePage.locator(".voice-button").isVisible(), false);
 });
@@ -539,8 +543,7 @@ test("date groups use local calendar days and disappear when their last bill is 
   await save();
   assert.deepEqual(await page.locator(".bill-group-title").allTextContents(), ["今天", "昨天", "更早"]);
   assert.deepEqual(await page.locator(".bill-group").evaluateAll((groups) => groups.map((group) => [...group.querySelectorAll("time")].map((time) => time.dateTime))), [["2026-11-01"], ["2026-10-31"], ["2026-10-30"]]);
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.locator(".bill-group").first().getByRole("button", { name: "删除" }).click();
+  await confirmDeletion(page.locator(".bill-group").first().getByRole("button", { name: "删除" }));
   await page.waitForFunction(() => document.querySelectorAll(".bill-item").length === 2);
   assert.deepEqual(await page.locator(".bill-group-title").allTextContents(), ["昨天", "更早"]);
 });
@@ -686,6 +689,7 @@ test("statistics charts render pixels, select slices and legends, and filter mon
   assert.match(await page.locator("#category-details").innerText(), /当月餐饮/);
   assert.doesNotMatch(await page.locator("#category-details").innerText(), /收入不进饼图|历史不进明细|当月地铁/);
   // The 25% traffic slice is at the upper-left of a clockwise pie starting at 12 o'clock.
+  await page.locator("#category-chart").scrollIntoViewIfNeeded();
   const bounds = await page.locator("#category-chart").boundingBox();
   await page.mouse.click(bounds.x + bounds.width * 0.28, bounds.y + bounds.height * 0.28);
   assert.match(await page.locator("#category-details").innerText(), /当月地铁/);
@@ -821,4 +825,212 @@ test("an aborted budget transaction keeps all previously committed limits intact
   });
   assert.equal(result.rejected, true);
   assert.deepEqual(result.saved, { total: 1000, categories: { 餐饮: 300, 交通: 50 } });
+});
+
+test("historical month selection filters charts and details without changing current budgets or records", async () => {
+  await page.clock.install({ time: new Date("2026-01-15T12:00:00+08:00") });
+  await openBudget();
+  await page.getByLabel("月度总预算（元）").fill("100");
+  await saveBudgetForm();
+  await openForm({ amount: "20", date: "2026-01-15", remark: "一月餐饮" });
+  await save();
+  await openForm({ amount: "75", date: "2025-12-31", remark: "十二月餐饮" });
+  await save();
+  await openForm({ amount: "200", type: "收入", date: "2025-12-01" });
+  await save();
+  const before = await readBills();
+  await page.getByRole("tab", { name: "统计", exact: true }).click();
+  assert.equal(await page.locator("#next-month").isDisabled(), true);
+  await page.getByRole("button", { name: "上个月", exact: true }).click({ timeout: 2000 });
+  assert.equal(await page.locator("#statistics-month").innerText(), "2025年12月");
+  assert.equal(await page.locator("#category-total").innerText(), "¥75.00");
+  await page.locator('#category-legend button[data-category="餐饮"]').click();
+  assert.match(await page.locator("#category-selection").innerText(), /75\.00[\s\S]*100%/);
+  assert.match(await page.locator("#category-details").innerText(), /十二月餐饮/);
+  assert.doesNotMatch(await page.locator("#category-details").innerText(), /一月餐饮/);
+  assert.deepEqual(await page.locator("#trend-data tr td:first-child").allTextContents(), ["2025-07", "2025-08", "2025-09", "2025-10", "2025-11", "2025-12"]);
+  await page.getByRole("tab", { name: "首页", exact: true }).click();
+  assert.match(await page.locator("#budget-overview").innerText(), /80\.00/);
+  assert.equal(await page.locator("#month-expense").innerText(), "20.00");
+  assert.deepEqual(await readBills(), before);
+  await page.getByRole("tab", { name: "统计", exact: true }).click();
+  await page.locator("#previous-month").click();
+  assert.equal(await page.locator("#category-total").innerText(), "¥0.00");
+  assert.equal(await page.locator("#chart-empty").isVisible(), true);
+  await page.locator("#next-month").click();
+  await page.locator("#next-month").click();
+  assert.equal(await page.locator("#statistics-month").innerText(), "2026年1月");
+  assert.equal(await page.locator("#next-month").isDisabled(), true);
+});
+
+test("custom deletion is modal, keyboard-cancellable and deletes only after confirmation", async () => {
+  await openForm({ remark: '<img src=x onerror="window.injected=true">' });
+  await save();
+  let nativeDialogs = 0;
+  page.on("dialog", async (dialog) => { nativeDialogs += 1; await dialog.dismiss(); });
+  await page.locator('[data-action="delete"]').click();
+  await page.locator("#delete-dialog[open]").waitFor({ timeout: 2000 });
+  assert.match(await page.locator("#delete-description").innerText(), /餐饮[\s\S]*28\.50/);
+  assert.equal((await readBills()).length, 1);
+  await page.keyboard.press("Escape");
+  await page.locator("#delete-dialog").waitFor({ state: "hidden" });
+  assert.equal((await readBills()).length, 1);
+  await confirmDeletion(page.locator('[data-action="delete"]'));
+  await waitForReady();
+  await page.waitForFunction(() => document.querySelectorAll(".bill-item").length === 0);
+  assert.deepEqual(await readBills(), []);
+  assert.equal(nativeDialogs, 0);
+  assert.equal(await page.locator("#empty-bills svg").isVisible(), true);
+});
+
+test("amount animation counts upward, finishes exactly, and skips motion when requested", async () => {
+  await waitForReady();
+  const samples = await page.evaluate(async () => {
+    const { animateAmount } = await import("./js/ui.js");
+    const element = document.querySelector("#month-income");
+    const animation = animateAmount(element, 1234.56);
+    const first = element.textContent;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const middle = element.textContent;
+    await animation;
+    return { first, middle, last: element.textContent };
+  });
+  assert.equal(samples.first, "0.00");
+  assert.ok(Number(samples.middle.replaceAll(",", "")) > 0 && Number(samples.middle.replaceAll(",", "")) < 1234.56);
+  assert.equal(samples.last, "1,234.56");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  assert.equal(await page.evaluate(async () => {
+    const { animateAmount } = await import("./js/ui.js");
+    const element = document.querySelector("#month-income");
+    await animateAmount(element, 0.3);
+    return element.textContent;
+  }), "0.30");
+});
+
+test("monthly detail disclosure supports rapid reversals and accessible expanded state", async () => {
+  await waitForReady();
+  await page.getByRole("tab", { name: "统计", exact: true }).click();
+  const toggle = page.locator("#trend-disclosure");
+  await toggle.click();
+  assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+  await page.locator("#trend-data").waitFor({ state: "visible" });
+  await toggle.click();
+  await toggle.click();
+  assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+  await toggle.click();
+  await page.locator("#trend-data").waitFor({ state: "hidden" });
+  assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+});
+
+test("selected pie slice protrudes with working hit testing and trend has a filled area", async () => {
+  await openForm({ amount: "20" });
+  await save();
+  await openForm({ amount: "20", category: "交通" });
+  await save();
+  await page.getByRole("tab", { name: "统计", exact: true }).click();
+  const sample = () => page.locator("#category-chart").evaluate((canvas) => {
+    const x = Math.round(canvas.width * 0.91);
+    const y = Math.round(canvas.height * 0.5);
+    return [...canvas.getContext("2d").getImageData(x, y, 1, 1).data];
+  });
+  const before = await sample();
+  await page.locator('#category-legend button[data-category="餐饮"]').click();
+  assert.notDeepEqual(await sample(), before);
+  assert.deepEqual((await sample()).slice(0, 3), [196, 92, 56]);
+  const bounds = await page.locator("#category-chart").boundingBox();
+  await page.mouse.click(bounds.x + bounds.width * 0.91, bounds.y + bounds.height * 0.5);
+  assert.equal(await page.locator('#category-legend button[data-category="餐饮"]').getAttribute("aria-pressed"), "true");
+  const area = await page.locator("#trend-chart").evaluate((canvas) => {
+    const ratio = canvas.width / canvas.getBoundingClientRect().width;
+    return [...canvas.getContext("2d").getImageData(Math.round(canvas.width * 0.9), Math.round(135 * ratio), 1, 1).data];
+  });
+  assert.ok(area[3] > 0, "area under trend line should be painted, not only the line/grid");
+});
+
+test("historical statistics work offline and stay within small-screen boundaries", async () => {
+  await page.clock.install({ time: new Date("2026-01-15T12:00:00+08:00") });
+  await waitForOfflineShell();
+  await openForm({ amount: "12345.67", date: "2025-12-31", remark: "历史账单与较长的备注文字" });
+  await save();
+  await context.setOffline(true);
+  await page.reload();
+  await waitForReady();
+  await page.getByRole("tab", { name: "统计", exact: true }).click();
+  await page.locator("#previous-month").click();
+  assert.equal(await page.locator("#category-total").innerText(), "¥12,345.67");
+  await page.locator('#category-legend button[data-category="餐饮"]').click();
+  assert.match(await page.locator("#category-details").innerText(), /历史账单/);
+  await page.locator("#trend-disclosure").click();
+  for (const width of [320, 375, 768, 1280]) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.waitForFunction(() => document.documentElement.scrollWidth <= innerWidth);
+    const issues = await page.evaluate(() => [...document.querySelectorAll("#category-legend button, #category-selection, #detail-list li, #trend-panel, .month-switcher")].filter((element) => {
+      const box = element.getBoundingClientRect();
+      return box.left < 0 || box.right > innerWidth || element.scrollWidth > element.clientWidth + 1;
+    }).map((element) => element.id || element.className || element.tagName));
+    assert.deepEqual(issues, [], `overflow at ${width}px`);
+  }
+});
+
+test("a newer amount animation cancels the previous target without stale final values", async () => {
+  await waitForReady();
+  const value = await page.evaluate(async () => {
+    const { animateAmount } = await import("./js/ui.js");
+    const element = document.querySelector("#month-income");
+    const old = animateAmount(element, 9000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const current = animateAmount(element, 12.34);
+    await Promise.all([old, current]);
+    return { text: element.textContent, running: element.dataset.animating };
+  });
+  assert.deepEqual(value, { text: "12.34", running: undefined });
+});
+
+test("resizing during a summary animation still fits its final formatted amount", async () => {
+  await waitForReady();
+  await page.evaluate(async () => {
+    const { animateAmount } = await import("./js/ui.js");
+    window.summaryAnimation = animateAmount(document.querySelector("#month-income"), 12345678.90);
+  });
+  await page.waitForTimeout(150);
+  await page.setViewportSize({ width: 320, height: 812 });
+  await page.evaluate(() => window.summaryAnimation);
+  assert.equal(await page.locator("#month-income").innerText(), "12,345,678.90");
+  assert.equal(await page.locator("#month-income").evaluate((element) => element.scrollWidth <= element.clientWidth + 1), true);
+});
+
+test("a single-category pie has no artificial radial divider through its center", async () => {
+  await openForm({ amount: "20" });
+  await save();
+  await page.getByRole("tab", { name: "统计", exact: true }).click();
+  const pixel = await page.locator("#category-chart").evaluate((canvas) =>
+    [...canvas.getContext("2d").getImageData(Math.round(canvas.width / 2), Math.round(canvas.height * 0.25), 1, 1).data]);
+  assert.deepEqual(pixel, [196, 92, 56, 255]);
+});
+
+test("bill signs and large amounts remain together on narrow screens", async () => {
+  await openForm({ amount: "8500", type: "收入" });
+  await save();
+  await openForm({ amount: "12345678.90" });
+  await save();
+  await page.setViewportSize({ width: 320, height: 812 });
+  await page.waitForFunction(() => [...document.querySelectorAll(".bill-amount")].every((element) => {
+    const style = getComputedStyle(element);
+    return element.getBoundingClientRect().height <= parseFloat(style.fontSize) * 1.6 && element.scrollWidth <= element.clientWidth + 1;
+  }), null, { timeout: 2000 });
+});
+
+test("rapid successive bill refreshes fit the new total rather than the previous animation target", async () => {
+  await page.setViewportSize({ width: 320, height: 812 });
+  await openForm({ amount: "1" });
+  await page.evaluate(() => document.querySelector("#bill-form").requestSubmit());
+  await page.waitForFunction(() => !document.querySelector(".manual-button").disabled);
+  await page.evaluate(() => {
+    document.querySelector(".manual-button").click();
+    document.querySelector("#bill-amount").value = "12345678.90";
+    document.querySelector("#bill-form").requestSubmit();
+  });
+  await waitForReady();
+  assert.equal(await page.locator("#month-expense").innerText(), "12,345,679.90");
+  assert.equal(await page.locator("#month-expense").evaluate((element) => element.scrollWidth <= element.clientWidth + 1), true);
 });

@@ -1,6 +1,7 @@
 import { getBudget, saveBudget } from "./budget-db.js";
 import { CATEGORIES, calculateStatistics, calculateBudgetUsage, categoryFor, money, monthKey } from "./finance.js";
 import { setupCharts } from "./charts.js";
+import { setupDisclosure } from "./ui.js";
 
 export function setupFinanceUI({ showMessage, updateDialogViewport }) {
   const budgetDialog = document.querySelector("#budget-dialog");
@@ -12,14 +13,19 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
   const legend = document.querySelector("#category-legend");
   const details = document.querySelector("#category-details");
   const tabs = [...document.querySelectorAll("[role=tab]")];
+  const previousMonth = document.querySelector("#previous-month");
+  const nextMonth = document.querySelector("#next-month");
   let records = [];
   let statistics = calculateStatistics([]);
+  let currentStatistics = statistics;
+  let selectedMonth = null;
   let settings = null;
   let selected = null;
   let available = false;
   let saving = false;
 
   const charts = setupCharts(document.querySelector("#category-chart"), document.querySelector("#trend-chart"), selectCategory);
+  setupDisclosure(document.querySelector("#trend-disclosure"), document.querySelector("#trend-panel"));
   for (const [index, category] of CATEGORIES.entries()) {
     const field = document.createElement("div");
     field.className = "form-field";
@@ -41,8 +47,16 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
 
   function renderDetails() {
     details.hidden = !selected;
+    const selection = document.querySelector("#category-selection");
+    selection.hidden = !selected;
     if (!selected) return;
-    document.querySelector("#details-title").textContent = `${selected} · 本月支出`;
+    const category = statistics.categories.find((item) => item.name === selected);
+    const share = statistics.expense ? Math.round(category.amount / statistics.expense * 100) : 0;
+    selection.style.setProperty("--category-color", category.color);
+    document.querySelector("#selection-name").textContent = `${category.icon} ${selected}`;
+    document.querySelector("#selection-amount").textContent = `¥${money.format(category.amount)}`;
+    document.querySelector("#selection-percent").textContent = `${share}%`;
+    document.querySelector("#details-title").textContent = `${selected} · ${statistics.key} 支出`;
     const list = document.querySelector("#detail-list");
     const rows = records.filter((bill) => bill.type === "支出" && monthKey(new Date(bill.date)) === statistics.key && categoryFor(bill.category).name === selected);
     list.replaceChildren(...rows.map((bill) => {
@@ -62,7 +76,12 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
   }
 
   function renderStatistics() {
-    document.querySelector("#statistics-month").textContent = `${new Date().getFullYear()}年${new Date().getMonth() + 1}月`;
+    const date = selectedMonth ?? new Date();
+    document.querySelector("#statistics-month").textContent = `${date.getFullYear()}年${date.getMonth() + 1}月`;
+    document.querySelector("#category-chart-title").textContent = statistics.key === monthKey(new Date()) ? "本月分类支出" : "分类支出";
+    nextMonth.disabled = !available || statistics.key >= monthKey(new Date());
+    document.querySelector("#chart-empty").hidden = statistics.expense > 0;
+    document.querySelector("#detail-empty").textContent = "该月该分类暂无支出";
     document.querySelector("#category-total").textContent = `¥${money.format(statistics.expense)}`;
     legend.replaceChildren(...statistics.categories.map((category) => {
       const button = document.createElement("button");
@@ -99,7 +118,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
   }
 
   function renderBudgets() {
-    const usage = settings ? calculateBudgetUsage(settings, statistics) : { total: null, categories: {} };
+    const usage = settings ? calculateBudgetUsage(settings, currentStatistics) : { total: null, categories: {} };
     overview.replaceChildren();
     if (!settings) {
       overview.textContent = "预算加载失败，请稍后重试。";
@@ -135,7 +154,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     }));
     for (const item of document.querySelectorAll(".bill-item")) {
       const bill = records.find((record) => record.id === Number(item.dataset.id));
-      const exceeded = bill?.type === "支出" && monthKey(new Date(bill.date)) === statistics.key && usage.categories[categoryFor(bill.category).name]?.exceeded;
+      const exceeded = bill?.type === "支出" && monthKey(new Date(bill.date)) === currentStatistics.key && usage.categories[categoryFor(bill.category).name]?.exceeded;
       item.classList.toggle("budget-exceeded", Boolean(exceeded));
       item.querySelector(".bill-warning").hidden = !exceeded;
     }
@@ -185,7 +204,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     budgetForm.setAttribute("aria-busy", "true");
     try {
       settings = await saveBudget(draft);
-      statistics = calculateStatistics(records);
+      currentStatistics = calculateStatistics(records);
       renderBudgets();
       budgetDialog.close();
       showMessage("预算已保存。");
@@ -200,11 +219,18 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
 
   function switchTab(tab) {
     if (!available) return;
+    const previous = tabs.findIndex((button) => button.getAttribute("aria-selected") === "true");
     for (const button of tabs) {
       const active = button === tab;
       button.setAttribute("aria-selected", String(active));
       button.tabIndex = active ? 0 : -1;
       document.getElementById(button.getAttribute("aria-controls")).hidden = !active;
+    }
+    const view = document.getElementById(tab.getAttribute("aria-controls"));
+    if (tabs.indexOf(tab) !== previous && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      view.getAnimations().forEach((animation) => animation.cancel());
+      view.animate([{ opacity: 0, transform: `translateX(${tabs.indexOf(tab) > previous ? 12 : -12}px)` },
+        { opacity: 1, transform: "translateX(0)" }], { duration: 220, easing: "ease-out" });
     }
     charts.update(statistics, selected);
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -220,15 +246,30 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     });
   });
 
+  function changeMonth(offset) {
+    if (!available) return;
+    const date = selectedMonth ?? new Date();
+    const next = new Date(date.getFullYear(), date.getMonth() + offset, 1);
+    if (monthKey(next) > monthKey(new Date())) return;
+    selectedMonth = monthKey(next) === monthKey(new Date()) ? null : next;
+    statistics = calculateStatistics(records, selectedMonth ?? new Date());
+    renderStatistics();
+  }
+  previousMonth.addEventListener("click", () => changeMonth(-1));
+  nextMonth.addEventListener("click", () => changeMonth(1));
+
   return {
     setAvailable(value) {
       available = value;
       budgetButton.disabled = !value;
       tabs.forEach((tab) => { tab.disabled = !value; });
+      previousMonth.disabled = !value;
+      nextMonth.disabled = !value || statistics.key >= monthKey(new Date());
     },
     async update(bills) {
       records = bills;
-      statistics = calculateStatistics(bills);
+      currentStatistics = calculateStatistics(bills);
+      statistics = selectedMonth ? calculateStatistics(bills, selectedMonth) : currentStatistics;
       renderStatistics();
       try { settings = await getBudget(); }
       catch (error) { settings = null; }
@@ -237,6 +278,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     clear() {
       records = [];
       statistics = calculateStatistics([]);
+      currentStatistics = statistics;
       settings = null;
       renderStatistics();
       renderBudgets();

@@ -81,6 +81,20 @@ voice confirmation, small-screen amounts and simulated keyboard viewports.
 Physical keyboard/safe-area behavior and Android WebView still require device
 testing. Waveform bars are a recording-state animation, not measured audio.
 
+### UI Polish And Historical Views
+
+Statistics month arrows read existing bills without saving a filter or changing
+the database. The pie, selected-category details and six-month trend follow the
+selected month; home budgets always use the actual current calendar month.
+The next-month arrow stops at the current month.
+
+Summary amounts animate from zero and keep two decimals and thousands
+separators. Reduced-motion preferences bypass the counter and page/disclosure
+animations. Amounts fit their available containers, including narrow screens.
+Recording ripples and waveform bars are decorative state feedback only.
+Deletion uses an accessible confirmation dialog with cancel/Escape support;
+success/failure notifications continue to use the existing timed Toast.
+
 ## Android Debug 构建指南
 
 只构建用于真机测试的 Debug APK，不配置 Release 签名或商店发布。

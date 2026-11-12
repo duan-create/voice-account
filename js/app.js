@@ -2,6 +2,7 @@ import { initDB, addBill, getBills, updateBill, deleteBill, getMonthSummary } fr
 import { setupVoiceInput } from "./voice.js";
 import { categoryFor } from "./finance.js";
 import { setupFinanceUI } from "./finance-ui.js";
+import { animateAmount, stopAmountAnimation, requestDelete, fitAmount } from "./ui.js";
 
 const manualButton = document.querySelector(".manual-button");
 const voiceButton = document.querySelector(".voice-button");
@@ -30,13 +31,21 @@ const finance = setupFinanceUI({ showMessage, updateDialogViewport });
 
 function fitSummaryAmounts() {
   for (const element of [incomeAmount, expenseAmount]) {
-    element.style.fontSize = "2rem";
-    const fontSize = parseFloat(getComputedStyle(element).fontSize);
-    if (element.scrollWidth > element.clientWidth && element.clientWidth > 0) {
-      element.style.fontSize = `${fontSize * element.clientWidth / element.scrollWidth}px`;
-    }
+    const displayed = element.textContent;
+    if (element.dataset.animating) element.textContent = element.getAttribute("aria-label");
+    fitAmount(element, "2rem");
+    element.textContent = displayed;
   }
 }
+function fitBillAmounts() {
+  list.querySelectorAll(".bill-amount").forEach((element) => fitAmount(element, "1.125rem"));
+}
+let listWidth = 0;
+new ResizeObserver(([entry]) => {
+  if (entry.contentRect.width === listWidth) return;
+  listWidth = entry.contentRect.width;
+  fitBillAmounts();
+}).observe(list);
 let summaryWidth = 0;
 new ResizeObserver(([entry]) => {
   if (entry.contentRect.width === summaryWidth) return;
@@ -112,6 +121,7 @@ function renderBills(records) {
     fragment.append(group);
   }
   list.replaceChildren(fragment);
+  fitBillAmounts();
 }
 
 async function refreshBills() {
@@ -119,11 +129,16 @@ async function refreshBills() {
     const [records, summary] = await Promise.all([getBills(), getMonthSummary()]);
     renderBills(records);
     bills = records;
+    stopAmountAnimation(incomeAmount);
+    stopAmountAnimation(expenseAmount);
     incomeAmount.textContent = money.format(summary.income);
     expenseAmount.textContent = money.format(summary.expense);
     fitSummaryAmounts();
+    animateAmount(incomeAmount, summary.income);
+    animateAmount(expenseAmount, summary.expense);
     listState.textContent = records.length ? "" : "暂无账单";
     listState.hidden = records.length > 0;
+    document.querySelector("#empty-bills").hidden = records.length > 0;
     ready = true;
     await finance.update(records);
   } catch (error) {
@@ -131,10 +146,15 @@ async function refreshBills() {
     ready = false;
     bills = [];
     list.replaceChildren();
+    stopAmountAnimation(incomeAmount);
+    stopAmountAnimation(expenseAmount);
+    incomeAmount.removeAttribute("aria-label");
+    expenseAmount.removeAttribute("aria-label");
     incomeAmount.textContent = "--";
     expenseAmount.textContent = "--";
     listState.textContent = "账单加载失败，请刷新页面重试。";
     listState.hidden = false;
+    document.querySelector("#empty-bills").hidden = true;
     finance.clear();
     throw error;
   }
@@ -323,7 +343,7 @@ list.addEventListener("click", async (event) => {
     openForm(bill);
     return;
   }
-  if (!window.confirm(`确认删除这笔${bill.category}账单（¥${money.format(bill.amount)}）？`)) {
+  if (!await requestDelete(`确认删除这笔${bill.category}账单（¥${money.format(bill.amount)}）？`, updateDialogViewport)) {
     showMessage("已取消删除。");
     return;
   }

@@ -23,33 +23,39 @@ export function setupCharts(pie, trend, onSelect) {
     if (circle) {
       const { ctx, width } = circle;
       const center = width / 2;
-      const radius = width * 0.43;
+      const radius = width * 0.39;
       let start = -Math.PI / 2;
       if (!statistics.expense) {
         ctx.beginPath();
         ctx.arc(center, center, radius, 0, Math.PI * 2);
-        ctx.fillStyle = "#edf1f6";
+        ctx.fillStyle = "#edf2fa";
         ctx.fill();
-        ctx.fillStyle = "#657184";
-        ctx.font = '14px "Microsoft YaHei", sans-serif';
-        ctx.textAlign = "center";
-        ctx.fillText("本月暂无支出", center, center + 5);
       }
       for (const category of statistics.categories.filter((item) => item.amount > 0)) {
         const end = start + category.amount / statistics.expense * Math.PI * 2;
+        const middle = (start + end) / 2;
+        const offset = selected === category.name ? width * 0.045 : 0;
+        const cx = center + Math.cos(middle) * offset;
+        const cy = center + Math.sin(middle) * offset;
+        ctx.save();
+        ctx.shadowColor = selected === category.name ? "#283e6640" : "#283e661c";
+        ctx.shadowBlur = selected === category.name ? 10 : 5;
+        ctx.shadowOffsetY = 3;
         ctx.beginPath();
-        ctx.moveTo(center, center);
-        ctx.arc(center, center, radius, start, end);
+        if (category.amount !== statistics.expense) ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, radius, start, end);
         ctx.closePath();
         ctx.fillStyle = category.color;
         ctx.fill();
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = selected === category.name ? 4 : 2;
+        ctx.shadowColor = "transparent";
+        ctx.strokeStyle = "#f8fafc";
+        ctx.lineWidth = 3;
         ctx.stroke();
-        slices.push({ name: category.name, start, end, center, radius });
+        ctx.restore();
+        slices.push({ name: category.name, start, end, cx, cy, radius });
         start = end;
       }
-      pie.setAttribute("aria-label", `本月分类支出，总计 ${money.format(statistics.expense)} 元`);
+      pie.setAttribute("aria-label", `${statistics.key} 分类支出，总计 ${money.format(statistics.expense)} 元`);
     }
     const chart = surface(trend, 220);
     if (!chart) return;
@@ -64,30 +70,43 @@ export function setupCharts(pie, trend, onSelect) {
     for (let index = 0; index < 4; index += 1) {
       const y = top + (bottom - top) * index / 3;
       const value = max * (3 - index) / 3;
-      ctx.strokeStyle = "#e9edf3";
+      ctx.strokeStyle = "#e9eef5";
       ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
       ctx.textAlign = "right";
       ctx.fillStyle = "#657184";
-      ctx.fillText(value >= 10000 ? `${(value / 10000).toFixed(1)}万` : value >= 1000 ? `${(value / 1000).toFixed(1)}千` : String(Math.round(value)), left - 6, y + 4);
+      ctx.fillText(value >= 10000 ? `${(value / 10000).toFixed(1)}万` : value >= 1000 ? `${(value / 1000).toFixed(1)}千` : value >= 10 ? String(Math.round(value)) : value.toFixed(1), left - 6, y + 4);
     }
     const x = (index) => left + (right - left) * index / 5;
     ctx.textAlign = "center";
     statistics.months.forEach((month, index) => ctx.fillText(month.label, x(index), height - 10));
     for (const [type, color] of [["income", "#238779"], ["expense", "#527dc9"]]) {
+      const points = statistics.months.map((month, index) => [x(index), bottom - month[type] / max * (bottom - top)]);
+      const fill = ctx.createLinearGradient(0, top, 0, bottom);
+      fill.addColorStop(0, `${color}30`);
+      fill.addColorStop(1, `${color}02`);
+      ctx.beginPath();
+      ctx.moveTo(left, bottom);
+      points.forEach(([px, py]) => ctx.lineTo(px, py));
+      ctx.lineTo(right, bottom);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
       ctx.strokeStyle = color;
       ctx.fillStyle = color;
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      statistics.months.forEach((month, index) => {
-        const y = bottom - month[type] / max * (bottom - top);
-        if (index === 0) ctx.moveTo(x(index), y);
-        else ctx.lineTo(x(index), y);
+      points.forEach(([px, py], index) => {
+        if (index === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
       });
       ctx.stroke();
       statistics.months.forEach((month, index) => {
         ctx.beginPath();
-        ctx.arc(x(index), bottom - month[type] / max * (bottom - top), 3.5, 0, Math.PI * 2);
+        ctx.arc(x(index), bottom - month[type] / max * (bottom - top), 4, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       });
     }
   }
@@ -96,9 +115,9 @@ export function setupCharts(pie, trend, onSelect) {
     const bounds = pie.getBoundingClientRect();
     const x = event.clientX - bounds.left;
     const y = event.clientY - bounds.top;
-    const slice = slices.find((item) => {
-      const distance = Math.hypot(x - item.center, y - item.center);
-      let angle = Math.atan2(y - item.center, x - item.center);
+    const slice = [...slices].sort((a, b) => Number(b.name === selected) - Number(a.name === selected)).find((item) => {
+      const distance = Math.hypot(x - item.cx, y - item.cy);
+      let angle = Math.atan2(y - item.cy, x - item.cx);
       if (angle < -Math.PI / 2) angle += Math.PI * 2;
       return distance <= item.radius && angle >= item.start && angle <= item.end;
     });

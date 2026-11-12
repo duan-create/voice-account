@@ -1,3 +1,13 @@
+:root {
+  --color-text: #1e293b;
+  --color-muted: #657184;
+  --color-primary: #2563eb;
+  --color-income: #0f766e;
+  --color-expense: #b45336;
+  --color-border: #dfe5ee;
+  --color-surface: #ffffff;
+}
+
 *,
 *::before,
 *::after {
@@ -16,40 +26,199 @@ body {
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
-  font-family: sans-serif;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
   line-height: 1.5;
-  color: #202124;
-  background: #f6f7f8;
+  letter-spacing: 0;
+  color: var(--color-text);
+  background: linear-gradient(180deg, #f0f5fc 0, #ffffff 32rem);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .app-header,
-#app,
-.app-nav {
-  padding-right: calc(1rem + env(safe-area-inset-right, 0px));
-  padding-left: calc(1rem + env(safe-area-inset-left, 0px));
+#app {
+  width: 100%;
+  max-width: 42rem;
+  margin-right: auto;
+  margin-left: auto;
+  padding-right: calc(1.25rem + env(safe-area-inset-right, 0px));
+  padding-left: calc(1.25rem + env(safe-area-inset-left, 0px));
 }
 
 .app-header {
-  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
-  padding-bottom: 1rem;
-  background: #ffffff;
-  border-bottom: 1px solid #dedfe0;
+  padding-top: calc(1.5rem + env(safe-area-inset-top, 0px));
+  padding-bottom: 1.25rem;
 }
 
 .app-header h1 {
-  font-size: 1.25rem;
+  font-size: 1.375rem;
+  font-weight: 700;
 }
 
 #app {
   flex: 1;
   min-width: 0;
-  padding-top: 1rem;
-  padding-bottom: 1rem;
+  padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
 }
 
-.app-nav {
-  min-height: calc(3.5rem + env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: #ffffff;
-  border-top: 1px solid #dedfe0;
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.summary-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.summary-card dt {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.summary-card dd {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.currency {
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.summary-amount {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.entry-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 0;
+}
+
+.voice-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.875rem;
+  width: 100%;
+  min-height: 7rem;
+  padding: 1.25rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--color-primary);
+  color: #ffffff;
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.manual-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 0.875rem;
+}
+
+.bills-section {
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.section-heading h2 {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.sample-label {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.bill-list {
+  list-style: none;
+}
+
+.bill-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 1rem;
+  padding: 1.125rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.bill-info,
+.bill-value {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bill-category {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.bill-info time,
+.bill-type {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.bill-value {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.bill-amount {
+  font-size: 1.125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bill-type {
+  color: var(--color-expense);
+}
+
+.bill-item-income .bill-amount,
+.bill-item-income .bill-type {
+  color: var(--color-income);
 }

@@ -15,7 +15,7 @@ let origin;
 const root = join(__dirname, "..");
 
 before(async () => {
-  const files = new Set(["index.html", "css/style.css", "js/app.js", "js/db.js", "js/db.selftest.js", "manifest.json", "sw.js"]);
+  const files = new Set(["index.html", "css/style.css", "js/app.js", "js/db.js", "js/db.selftest.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "manifest.json", "sw.js"]);
   const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json" };
   server = createServer(async (request, response) => {
     const path = new URL(request.url, "http://localhost").pathname.slice(1) || "index.html";
@@ -70,7 +70,7 @@ async function save() {
   await waitForReady();
 }
 
-test("manual entry opens a form with today's local date; cancel and voice do not write", async () => {
+test("manual entry opens a form with today's local date; cancel does not write", async () => {
   await openForm();
   const today = await page.evaluate(() => {
     const date = new Date();
@@ -79,8 +79,180 @@ test("manual entry opens a form with today's local date; cancel and voice do not
   assert.equal(await page.getByLabel("日期", { exact: true }).inputValue(), today);
   assert.deepEqual(await page.getByLabel("分类", { exact: true }).locator("option").allTextContents(), ["餐饮", "交通", "购物", "住宿", "娱乐", "其他"]);
   await page.getByRole("button", { name: "取消", exact: true }).click();
-  await page.locator(".voice-button").click();
   assert.equal(await page.locator("dialog[open]").count(), 0);
+  assert.deepEqual(await readBills(), []);
+});
+
+// Only the external recognition service is replaced; parsing, UI and IndexedDB stay real.
+async function installSpeech({ prefixed = false, delayed = false, unsupported = false, startError = false } = {}) {
+  await page.addInitScript(({ prefixed, delayed, unsupported, startError }) => {
+    window.speechCalls = [];
+    class TestRecognition {
+      constructor() { window.speech = this; }
+      start() {
+        window.speechCalls.push("start");
+        if (startError) throw new DOMException("Permission denied", "NotAllowedError");
+        if (!delayed) queueMicrotask(() => this.onstart?.());
+      }
+      stop() { window.speechCalls.push("stop"); }
+      abort() { window.speechCalls.push("abort"); }
+      result(text, final = true) {
+        const result = [{ transcript: text, confidence: 0.95 }];
+        result.isFinal = final;
+        this.onresult?.({ resultIndex: 0, results: [result] });
+      }
+      end() { this.onend?.(); }
+      error(code) { this.onerror?.({ error: code }); this.onend?.(); }
+    }
+    Object.defineProperty(window, "SpeechRecognition", { configurable: true, value: !unsupported && !prefixed ? TestRecognition : undefined });
+    Object.defineProperty(window, "webkitSpeechRecognition", { configurable: true, value: !unsupported && prefixed ? TestRecognition : undefined });
+  }, { prefixed, delayed, unsupported, startError });
+  await page.reload();
+  await waitForReady();
+}
+
+async function holdVoice() {
+  const box = await page.locator(".voice-button").boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+}
+
+test("press/release recognizes Chinese and fills the existing form without saving", async () => {
+  await installSpeech();
+  await holdVoice();
+  assert.equal(await page.evaluate(() => window.speech.lang), "zh-CN");
+  assert.match(await page.locator(".voice-button").innerText(), /录音中/);
+  await page.evaluate(() => window.speech.result("中午吃面花了二十八块", false));
+  assert.match(await page.locator("#voice-status").innerText(), /中午吃面/);
+  assert.equal(await page.locator("dialog[open]").count(), 0);
+  await page.mouse.up();
+  assert.deepEqual(await page.evaluate(() => window.speechCalls), ["start", "stop"]);
+  await page.evaluate(() => { window.speech.result("中午吃面花了二十八块"); window.speech.end(); });
+  await page.locator("#bill-dialog[open]").waitFor();
+  assert.equal(await page.getByLabel("金额（元）").inputValue(), "28");
+  assert.equal(await page.getByLabel("分类", { exact: true }).inputValue(), "餐饮");
+  assert.equal(await page.getByLabel("备注", { exact: true }).inputValue(), "中午吃面");
+  assert.deepEqual(await readBills(), []);
+  await page.getByLabel("金额（元）").fill("29");
+  await save();
+  assert.equal((await readBills())[0].amount, 29);
+});
+
+test("touch release before recognition starts still stops and missing amount requires manual input", async () => {
+  await installSpeech({ prefixed: true, delayed: true });
+  await page.locator(".voice-button").dispatchEvent("pointerdown", { pointerId: 42, pointerType: "touch", button: 0, isPrimary: true });
+  await page.locator(".voice-button").dispatchEvent("pointerup", { pointerId: 42, pointerType: "touch", button: 0 });
+  await page.evaluate(() => window.speech.onstart());
+  assert.deepEqual(await page.evaluate(() => window.speechCalls), ["start", "stop"]);
+  await page.evaluate(() => { window.speech.result("昨天吃饭"); window.speech.end(); });
+  assert.equal(await page.getByLabel("金额（元）").inputValue(), "");
+  assert.match(await page.locator("#form-message").innerText(), /未识别到金额，请手动补充/);
+  const today = await page.evaluate(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  assert.equal(await page.getByLabel("日期", { exact: true }).inputValue(), today);
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  assert.deepEqual(await readBills(), []);
+});
+
+test("unsupported speech and denied microphone provide a manual-entry fallback", async () => {
+  await installSpeech({ unsupported: true });
+  await holdVoice();
+  await page.mouse.up();
+  assert.match(await page.locator("#voice-status").innerText(), /不支持.*手动记账/);
+  await openForm();
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await installSpeech();
+  await holdVoice();
+  await page.evaluate(() => window.speech.error("not-allowed"));
+  await page.mouse.up();
+  assert.match(await page.locator("#voice-status").innerText(), /权限.*手动记账/);
+  assert.equal(await page.locator(".manual-button").isEnabled(), true);
+  assert.equal(await page.locator(".voice-button").getAttribute("data-state"), "idle");
+  assert.deepEqual(await readBills(), []);
+});
+
+test("network, silence, startup errors and pointer cancellation never open or save a bill", async () => {
+  await installSpeech();
+  for (const code of ["network", "no-speech", "audio-capture"]) {
+    await holdVoice();
+    await page.evaluate((code) => window.speech.error(code), code);
+    await page.mouse.up();
+    assert.match(await page.locator("#voice-status").innerText(), /手动记账/);
+    assert.equal(await page.locator("dialog[open]").count(), 0);
+  }
+  await holdVoice();
+  await page.locator(".voice-button").dispatchEvent("pointercancel", { pointerId: 1 });
+  await page.mouse.up();
+  await page.evaluate(() => { window.speech.result("收入一百元"); window.speech.end(); });
+  assert.equal(await page.locator("dialog[open]").count(), 0);
+  assert.equal(await page.locator(".manual-button").isEnabled(), true);
+  await installSpeech({ startError: true });
+  await holdVoice();
+  await page.mouse.up();
+  assert.match(await page.locator("#voice-status").innerText(), /权限.*手动记账/);
+  assert.deepEqual(await readBills(), []);
+});
+
+test("only final results fill once; conflicting categories fall back to other", async () => {
+  await installSpeech();
+  await holdVoice();
+  await page.evaluate(() => {
+    window.speech.result("吃饭打车花了五十元");
+    window.speech.result("吃饭打车花了五十元");
+  });
+  await page.mouse.up();
+  await page.evaluate(() => window.speech.end());
+  assert.equal(await page.getByLabel("金额（元）").inputValue(), "50");
+  assert.equal(await page.getByLabel("分类", { exact: true }).inputValue(), "其他");
+  assert.deepEqual(await readBills(), []);
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await holdVoice();
+  await page.evaluate(() => window.speech.result("花了一百元", false));
+  await page.mouse.up();
+  await page.evaluate(() => window.speech.end());
+  assert.equal(await page.locator("dialog[open]").count(), 0);
+  assert.match(await page.locator("#voice-status").innerText(), /手动记账/);
+});
+
+test("recognition ending early waits for release; a new session ignores late events from the previous one", async () => {
+  await installSpeech();
+  await holdVoice();
+  await page.evaluate(() => { window.oldSpeech = window.speech; window.speech.result("工资收入五千元"); window.speech.end(); });
+  assert.equal(await page.locator("dialog[open]").count(), 0);
+  await page.mouse.up();
+  assert.equal(await page.getByLabel("金额（元）").inputValue(), "5000");
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await holdVoice();
+  await page.evaluate(() => { window.oldSpeech.result("花了20元"); window.oldSpeech.end(); });
+  assert.equal(await page.locator("dialog[open]").count(), 0);
+  await page.mouse.up();
+  await page.evaluate(() => { window.speech.result("收入一百元"); window.speech.end(); });
+  assert.equal(await page.getByLabel("金额（元）").inputValue(), "100");
+  assert.deepEqual(await readBills(), []);
+});
+
+test("keyboard hold, focus loss and recognition timeout restore manual entry without writing", async () => {
+  await installSpeech();
+  await page.locator(".voice-button").focus();
+  await page.keyboard.down("Space");
+  assert.match(await page.locator(".voice-button").innerText(), /录音中/);
+  await page.keyboard.up("Space");
+  await page.evaluate(() => { window.speech.result("收入一百元"); window.speech.end(); });
+  assert.equal(await page.getByRole("radio", { name: "收入", exact: true }).isChecked(), true);
+  await page.getByRole("button", { name: "取消", exact: true }).click();
+  await holdVoice();
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await page.mouse.up();
+  assert.equal(await page.locator(".manual-button").isEnabled(), true);
+  assert.match(await page.locator("#voice-status").innerText(), /已取消/);
+  await page.clock.install();
+  await holdVoice();
+  await page.mouse.up();
+  await page.clock.fastForward(16000);
+  assert.match(await page.locator("#voice-status").innerText(), /超时.*手动记账/);
+  assert.equal(await page.locator(".manual-button").isEnabled(), true);
   assert.deepEqual(await readBills(), []);
 });
 

@@ -29,7 +29,7 @@
       </section>
 
       <section class="entry-section" aria-label="记账操作">
-        <button class="voice-button" type="button">
+        <button class="voice-button" type="button" disabled aria-describedby="voice-status" aria-pressed="false">
           <!-- @license lucide-static v0.468.0 - ISC -->
           <svg aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
@@ -38,6 +38,7 @@
           </svg>
           <span>按住说话 记账</span>
         </button>
+        <p id="voice-status" class="voice-status" role="status" aria-live="polite"></p>
         <button class="manual-button" type="button" disabled>
           <!-- @license lucide-static v0.468.0 - ISC -->
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

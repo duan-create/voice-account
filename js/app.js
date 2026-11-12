@@ -1,6 +1,8 @@
 import { initDB, addBill, getBills, updateBill, deleteBill, getMonthSummary } from "./db.js";
+import { setupVoiceInput } from "./voice.js";
 
 const manualButton = document.querySelector(".manual-button");
+const voiceButton = document.querySelector(".voice-button");
 const dialog = document.querySelector("#bill-dialog");
 const form = document.querySelector("#bill-form");
 const fields = form.elements;
@@ -15,6 +17,7 @@ let bills = [];
 let editingId = null;
 let busy = false;
 let ready = false;
+let voiceActive = false;
 
 function localDate(timestamp = Date.now()) {
   const date = new Date(timestamp);
@@ -28,9 +31,10 @@ function showMessage(message, error = false) {
 
 function setBusy(value) {
   busy = value;
-  manualButton.disabled = value || !ready;
+  manualButton.disabled = value || !ready || voiceActive;
+  voiceButton.disabled = value || !ready;
   fields.namedItem("form-fields").disabled = value;
-  list.querySelectorAll("button").forEach((button) => { button.disabled = value || !ready; });
+  list.querySelectorAll("button").forEach((button) => { button.disabled = value || !ready || voiceActive; });
   form.setAttribute("aria-busy", String(value));
 }
 
@@ -79,7 +83,7 @@ async function refreshBills() {
 }
 
 function openForm(bill = null) {
-  if (busy || !ready) return;
+  if (busy || !ready || voiceActive) return;
   form.reset();
   editingId = bill?.id ?? null;
   document.querySelector("#form-title").textContent = bill ? "编辑账单" : "手动记账";
@@ -92,6 +96,29 @@ function openForm(bill = null) {
   dialog.showModal();
   fields.namedItem("amount").focus();
 }
+
+setupVoiceInput({
+  button: voiceButton,
+  status: document.querySelector("#voice-status"),
+  isAvailable: () => ready && !busy && !dialog.open,
+  setActive(active) {
+    voiceActive = active;
+    setBusy(busy);
+  },
+  onDraft(draft) {
+    openForm();
+    if (!dialog.open) return;
+    fields.namedItem("type").value = draft.type ?? "";
+    fields.namedItem("amount").value = draft.amount ?? "";
+    fields.namedItem("category").value = draft.category;
+    fields.namedItem("remark").value = draft.remark;
+    document.querySelector("#form-title").textContent = "确认语音账单";
+    const messages = [];
+    if (draft.amount === null) messages.push("未识别到金额，请手动补充");
+    if (draft.type === null) messages.push("收支类型不明确，请手动选择");
+    formMessage.textContent = messages.join("；");
+  }
+});
 
 manualButton.addEventListener("click", () => openForm());
 document.querySelector("#cancel-bill").addEventListener("click", () => {

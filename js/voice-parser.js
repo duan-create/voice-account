@@ -3,15 +3,15 @@ import Nzh from "./vendor/nzh-cn.js";
 const digits = "零一二三四五六七八九";
 const numberPattern = "[0-9零一二三四五六七八九十百千万亿点.]+";
 const singleDigit = "[0-9零一二三四五六七八九]";
-const moneyPattern = new RegExp(`(?:${numberPattern}|半)(?:元|块)(?:钱)?(?:${singleDigit}(?:角|毛)(?:${singleDigit}分)?|${singleDigit}分|半|${singleDigit}(?=[，。！？,!?\\s]|$))?|${singleDigit}(?:角|毛)(?:${singleDigit}分)?|${singleDigit}分`, "g");
-const expensePattern = /花了|花费|支出|支付|付了|消费/g;
-const incomePattern = /赚了|赚到|收入|收到|入账/g;
+const moneyPattern = new RegExp(`(?:${numberPattern}|半)(?:元|圆|块|快钱)(?:钱)?(?:${singleDigit}(?:角|毛)(?:${singleDigit}分)?|${singleDigit}分|半|${singleDigit}(?=[，。！？,!?\\s]|$))?|${numberPattern}(?:角|毛(?!衣))(?:${singleDigit}分)?|${numberPattern}分(?!钟)`, "g");
+const expensePattern = /花了|花费|(?<!鲜)花(?=\s*[0-9零一二三四五六七八九十百千万亿点.两俩仨])|用了|支出|支付|付了|消费/g;
+const incomePattern = /赚了|赚到|收入|收到|入[账帐]|进[账帐]/g;
 const categoryRules = [
-  ["餐饮", /餐饮|吃饭|吃面|午餐|早餐|晚餐|午饭|早饭|晚饭|外卖|咖啡|奶茶|买菜|饭店|餐厅/],
+  ["餐饮", /餐饮|吃(?:了|过)?(?:饭|面)|午餐|早餐|晚餐|午饭|早饭|晚饭|外[卖麦]|咖啡|奶茶|零食|买菜|饭店|餐厅/],
   ["交通", /交通|地铁|公交|打车|出租车|高铁|火车|机票|加油|停车/],
   ["购物", /购物|买衣服|衣服|鞋子|超市|网购|日用品|手机|电脑/],
   ["住宿", /住宿|酒店|宾馆|民宿|房费|房租/],
-  ["娱乐", /娱乐|电影|游戏|唱歌|门票|演唱会|游乐园/]
+  ["娱乐", /娱乐|电影|游戏|唱歌|游玩|门票|演唱会|游乐园/]
 ];
 
 function parseNumber(text) {
@@ -28,9 +28,16 @@ function parseNumber(text) {
 }
 
 function parseMoney(text) {
-  const parts = /^(.*?)(?:元|块)(?:钱)?(.*)$/.exec(text);
-  const base = parts ? parseNumber(parts[1]) : 0;
-  const fraction = parts ? parts[2] : text;
+  const parts = /^(.*?)(?:元|圆|块|快钱)(?:钱)?(.*)$/.exec(text);
+  if (!parts) {
+    const coins = new RegExp(`^(?:(${numberPattern})(?:角|毛)(?:(${singleDigit})分)?|(${numberPattern})分)$`).exec(text);
+    if (!coins) return null;
+    const value = parseNumber(coins[1] ?? coins[3]);
+    if (!Number.isInteger(value)) return null;
+    return (coins[1] ? value * 10 + (coins[2] ? parseNumber(coins[2]) : 0) : value) / 100;
+  }
+  const base = parseNumber(parts[1]);
+  const fraction = parts[2];
   if (base === null) return null;
   if (!fraction) return base;
   if (!Number.isInteger(base)) return null;
@@ -43,7 +50,8 @@ function parseMoney(text) {
 
 export function parseVoiceBill(transcript) {
   const original = transcript.normalize("NFKC").trim();
-  const text = original.replace(/两/g, "二").replace(/〇/g, "零");
+  // One-character substitutions keep amount offsets aligned with the original remark.
+  const text = original.replace(/[两俩]/g, "二").replace(/仨/g, "三").replace(/〇/g, "零");
   const income = new RegExp(incomePattern.source).test(text);
   const expense = new RegExp(expensePattern.source).test(text);
   const type = income && expense ? null : income ? "收入" : "支出";
@@ -52,7 +60,7 @@ export function parseVoiceBill(transcript) {
   const matches = [...text.matchAll(moneyPattern)];
   // Without a currency unit, accept only a number directly following an explicit money verb.
   if (!matches.length) {
-    const plainPattern = new RegExp(`(?:花了|花费|支出|支付|付了|消费|赚了|赚到|收入|收到|入账)\\s*(${numberPattern})(?=[，。！？,!?\\s]|$)`, "g");
+    const plainPattern = new RegExp(`(?:${expensePattern.source}|${incomePattern.source})\\s*(${numberPattern})(?=[，。！？,!?\\s]|$)`, "g");
     for (const match of text.matchAll(plainPattern)) {
       matches.push({ 0: match[1], index: match.index + match[0].indexOf(match[1]), plain: true });
     }
@@ -71,7 +79,12 @@ export function parseVoiceBill(transcript) {
   if (!Number.isFinite(amount) || amount <= 0 || !Number.isSafeInteger(Math.round(amount * 100))
     || Math.abs(amount * 100 - Math.round(amount * 100)) > 0.00001) amount = null;
   let remark = original;
-  if (amount !== null && candidate) remark = original.slice(0, candidate.index) + original.slice(candidate.index + candidate[0].length);
+  if (amount !== null && candidate) {
+    const before = original.slice(0, candidate.index);
+    const trailingVerb = [...original.matchAll(expensePattern)].find((match) => match[0] === "花"
+      && match.index < candidate.index && before.slice(match.index + match[0].length).trim() === "");
+    remark = (trailingVerb ? before.slice(0, trailingVerb.index) : before) + original.slice(candidate.index + candidate[0].length);
+  }
   remark = remark.replace(expensePattern, "").replace(incomePattern, "").replace(/^[\s，。！？,!?]+|[\s，。！？,!?]+$/g, "").trim();
   return { amount, type, category, remark };
 }

@@ -19,11 +19,11 @@
         <dl class="summary-grid">
           <div class="summary-card">
             <dt>本月收入</dt>
-            <dd><span class="currency">¥</span><span class="summary-amount">0.00</span></dd>
+            <dd><span class="currency">¥</span><span class="summary-amount" id="month-income">--</span></dd>
           </div>
           <div class="summary-card">
             <dt>本月支出</dt>
-            <dd><span class="currency">¥</span><span class="summary-amount">0.00</span></dd>
+            <dd><span class="currency">¥</span><span class="summary-amount" id="month-expense">--</span></dd>
           </div>
         </dl>
       </section>
@@ -38,7 +38,7 @@
           </svg>
           <span>按住说话 记账</span>
         </button>
-        <button class="manual-button" type="button">
+        <button class="manual-button" type="button" disabled>
           <!-- @license lucide-static v0.468.0 - ISC -->
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 20h9" />
@@ -51,42 +51,70 @@
       <section class="bills-section" aria-labelledby="bills-title">
         <div class="section-heading">
           <h2 id="bills-title">账单列表</h2>
-          <span class="sample-label">示例数据</span>
         </div>
-        <ul class="bill-list">
+        <p id="app-message" class="app-message" role="status" aria-live="polite"></p>
+        <p id="list-state" class="list-state" role="status">正在加载账单...</p>
+        <ul class="bill-list"></ul>
+        <template id="bill-template">
           <li class="bill-item">
             <div class="bill-info">
-              <h3 class="bill-category">餐饮</h3>
-              <time datetime="2026-11-12">2026-11-12</time>
+              <h3 class="bill-category"></h3>
+              <time></time>
+              <p class="bill-remark"></p>
             </div>
             <div class="bill-value">
-              <span class="bill-amount">-¥28.00</span>
-              <span class="bill-type">支出</span>
+              <span class="bill-amount"></span>
+              <span class="bill-type"></span>
+            </div>
+            <div class="bill-actions">
+              <button class="bill-action" type="button" data-action="edit">编辑</button>
+              <button class="bill-action bill-delete" type="button" data-action="delete">删除</button>
             </div>
           </li>
-          <li class="bill-item">
-            <div class="bill-info">
-              <h3 class="bill-category">交通</h3>
-              <time datetime="2026-11-11">2026-11-11</time>
-            </div>
-            <div class="bill-value">
-              <span class="bill-amount">-¥6.00</span>
-              <span class="bill-type">支出</span>
-            </div>
-          </li>
-          <li class="bill-item bill-item-income">
-            <div class="bill-info">
-              <h3 class="bill-category">工资</h3>
-              <time datetime="2026-11-10">2026-11-10</time>
-            </div>
-            <div class="bill-value">
-              <span class="bill-amount">+¥5,000.00</span>
-              <span class="bill-type">收入</span>
-            </div>
-          </li>
-        </ul>
+        </template>
       </section>
     </main>
+    <dialog id="bill-dialog" aria-labelledby="form-title">
+      <form id="bill-form" novalidate>
+        <h2 id="form-title">手动记账</h2>
+        <fieldset id="form-fields">
+          <legend class="sr-only">账单信息</legend>
+          <fieldset class="type-options">
+            <legend>收支类型</legend>
+            <label><input type="radio" name="type" value="支出" checked required>支出</label>
+            <label><input type="radio" name="type" value="收入" required>收入</label>
+          </fieldset>
+          <div class="form-field">
+            <label for="bill-amount">金额（元）</label>
+            <input id="bill-amount" name="amount" type="number" inputmode="decimal" min="0.01" step="0.01" required aria-describedby="form-message">
+          </div>
+          <div class="form-field">
+            <label for="bill-category">分类</label>
+            <select id="bill-category" name="category" required>
+              <option>餐饮</option>
+              <option>交通</option>
+              <option>购物</option>
+              <option>住宿</option>
+              <option>娱乐</option>
+              <option>其他</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="bill-remark">备注</label>
+            <textarea id="bill-remark" name="remark" rows="2"></textarea>
+          </div>
+          <div class="form-field">
+            <label for="bill-date">日期</label>
+            <input id="bill-date" name="date" type="date" required>
+          </div>
+          <p id="form-message" class="form-message" role="alert"></p>
+          <div class="form-actions">
+            <button class="cancel-button" id="cancel-bill" type="button">取消</button>
+            <button class="save-button" type="submit">确认</button>
+          </div>
+        </fieldset>
+      </form>
+    </dialog>
     <script>
       if ("serviceWorker" in navigator && window.isSecureContext && location.protocol !== "file:") {
         window.addEventListener("load", () => {

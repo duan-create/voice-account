@@ -3,6 +3,9 @@ import { setupVoiceInput } from "./voice.js";
 
 const manualButton = document.querySelector(".manual-button");
 const voiceButton = document.querySelector(".voice-button");
+const voiceStatus = document.querySelector("#voice-status");
+const offlineStatus = document.querySelector("#offline-status");
+const exportButton = document.querySelector("#export-backup");
 const dialog = document.querySelector("#bill-dialog");
 const form = document.querySelector("#bill-form");
 const fields = form.elements;
@@ -32,7 +35,8 @@ function showMessage(message, error = false) {
 function setBusy(value) {
   busy = value;
   manualButton.disabled = value || !ready || voiceActive;
-  voiceButton.disabled = value || !ready;
+  voiceButton.disabled = value || !ready || !navigator.onLine;
+  exportButton.disabled = value || !ready || voiceActive;
   fields.namedItem("form-fields").disabled = value;
   list.querySelectorAll("button").forEach((button) => { button.disabled = value || !ready || voiceActive; });
   form.setAttribute("aria-busy", String(value));
@@ -41,6 +45,11 @@ function setBusy(value) {
 function renderBills(records) {
   const fragment = document.createDocumentFragment();
   const template = document.querySelector("#bill-template");
+  const today = localDate();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayDate = localDate(yesterday);
+  const groups = new Map([ ["今天", []], ["昨天", []], ["更早", []] ]);
   for (const bill of records) {
     const item = template.content.firstElementChild.cloneNode(true);
     item.dataset.id = bill.id;
@@ -54,7 +63,21 @@ function renderBills(records) {
     const remark = item.querySelector(".bill-remark");
     remark.textContent = bill.remark;
     remark.hidden = !bill.remark;
-    fragment.append(item);
+    const group = date.dateTime === today ? "今天" : date.dateTime === yesterdayDate ? "昨天" : "更早";
+    groups.get(group).push(item);
+  }
+  for (const [title, items] of groups) {
+    if (!items.length) continue;
+    const group = document.createElement("section");
+    group.className = "bill-group";
+    group.setAttribute("aria-label", title);
+    const heading = document.createElement("h3");
+    heading.className = "bill-group-title";
+    heading.textContent = title;
+    const rows = document.createElement("ul");
+    rows.append(...items);
+    group.append(heading, rows);
+    fragment.append(group);
   }
   list.replaceChildren(fragment);
 }
@@ -94,13 +117,14 @@ function openForm(bill = null) {
   fields.namedItem("date").value = localDate(bill?.date);
   formMessage.textContent = "";
   dialog.showModal();
+  updateDialogViewport();
   fields.namedItem("amount").focus();
 }
 
 setupVoiceInput({
   button: voiceButton,
-  status: document.querySelector("#voice-status"),
-  isAvailable: () => ready && !busy && !dialog.open,
+  status: voiceStatus,
+  isAvailable: () => navigator.onLine && ready && !busy && !dialog.open,
   setActive(active) {
     voiceActive = active;
     setBusy(busy);
@@ -117,6 +141,58 @@ setupVoiceInput({
     if (draft.amount === null) messages.push("未识别到金额，请手动补充");
     if (draft.type === null) messages.push("收支类型不明确，请手动选择");
     formMessage.textContent = messages.join("；");
+  }
+});
+
+function updateConnection() {
+  if (!navigator.onLine && voiceActive) voiceButton.dispatchEvent(new Event("pointercancel"));
+  voiceButton.hidden = !navigator.onLine;
+  voiceStatus.hidden = !navigator.onLine;
+  offlineStatus.hidden = navigator.onLine;
+  setBusy(busy);
+}
+
+window.addEventListener("online", updateConnection);
+window.addEventListener("offline", updateConnection);
+updateConnection();
+
+function updateDialogViewport() {
+  if (!dialog.open) return;
+  const viewport = window.visualViewport;
+  dialog.style.setProperty("--dialog-viewport-height", `${viewport?.height ?? window.innerHeight}px`);
+  dialog.style.setProperty("--dialog-viewport-top", `${viewport?.offsetTop ?? 0}px`);
+  requestAnimationFrame(() => {
+    if (dialog.open && form.contains(document.activeElement)) {
+      document.activeElement.scrollIntoView({ block: "nearest" });
+    }
+  });
+}
+
+window.visualViewport?.addEventListener("resize", updateDialogViewport);
+window.visualViewport?.addEventListener("scroll", updateDialogViewport);
+window.addEventListener("resize", updateDialogViewport);
+form.addEventListener("focusin", updateDialogViewport);
+
+exportButton.addEventListener("click", async () => {
+  if (busy || !ready || voiceActive) return;
+  setBusy(true);
+  try {
+    const records = await getBills();
+    const url = URL.createObjectURL(new Blob([JSON.stringify(records, null, 2)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `voice-account-bills-${localDate()}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    // Leave time for the browser to begin reading the download before releasing its URL.
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    showMessage("备份文件已生成，请妥善保存下载的 JSON 文件。");
+  } catch (error) {
+    console.error("[Bills] Export failed:", error);
+    showMessage("导出失败，请重试；本地账单未受影响。", true);
+  } finally {
+    setBusy(false);
   }
 });
 

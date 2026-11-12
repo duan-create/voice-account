@@ -46,6 +46,10 @@ svg {
   flex-shrink: 0;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .app-header,
 #app {
   width: 100%;
@@ -76,6 +80,13 @@ svg {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.storage-notice {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
 }
 
 .summary-card {
@@ -149,7 +160,8 @@ svg {
   background: #475569;
 }
 
-.voice-status {
+.voice-status,
+.offline-status {
   width: 100%;
   min-height: 1.5em;
   color: var(--color-muted);
@@ -190,8 +202,15 @@ svg {
   font-weight: 700;
 }
 
-.bill-list {
+.bill-group ul {
   list-style: none;
+}
+
+.bill-group-title {
+  padding: 1rem 0 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-muted);
 }
 
 .bill-item {
@@ -300,14 +319,39 @@ button:disabled {
   color: #b42318;
 }
 
+.backup-section {
+  display: flex;
+  justify-content: center;
+  padding-top: 1.5rem;
+}
+
+.backup-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-size: 0.875rem;
+}
+
 #bill-dialog {
+  position: fixed;
+  inset: auto 0;
+  top: calc(var(--dialog-viewport-top, 0px) + var(--dialog-viewport-height, 100dvh) / 2);
+  transform: translateY(-50%);
   width: calc(100% - 2rem);
   max-width: 26rem;
-  max-height: calc(100dvh - 2rem);
-  margin: auto;
+  max-height: calc(var(--dialog-viewport-height, 100dvh) - 2rem);
+  margin: 0 auto;
   padding: 1.25rem;
   overflow: auto;
   overscroll-behavior: contain;
+  scroll-padding: 1rem;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   color: var(--color-text);

@@ -26,6 +26,7 @@
             <dd><span class="currency">¥</span><span class="summary-amount" id="month-expense">--</span></dd>
           </div>
         </dl>
+        <p class="storage-notice">数据仅保存在本地浏览器，清除缓存会丢失，建议定期导出备份</p>
       </section>
 
       <section class="entry-section" aria-label="记账操作">
@@ -39,6 +40,7 @@
           <span>按住说话 记账</span>
         </button>
         <p id="voice-status" class="voice-status" role="status" aria-live="polite"></p>
+        <p id="offline-status" class="offline-status" role="status" hidden>当前离线，语音识别暂不可用，请使用手动记账。</p>
         <button class="manual-button" type="button" disabled>
           <!-- @license lucide-static v0.468.0 - ISC -->
           <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -55,7 +57,7 @@
         </div>
         <p id="app-message" class="app-message" role="status" aria-live="polite"></p>
         <p id="list-state" class="list-state" role="status">正在加载账单...</p>
-        <ul class="bill-list"></ul>
+        <div class="bill-list"></div>
         <template id="bill-template">
           <li class="bill-item">
             <div class="bill-info">
@@ -74,6 +76,16 @@
           </li>
         </template>
       </section>
+      <footer class="backup-section">
+        <button id="export-backup" class="backup-button" type="button" disabled>
+          <!-- @license lucide-static v0.468.0 - ISC -->
+          <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <path d="m7 10 5 5 5-5M12 15V3" />
+          </svg>
+          <span>导出备份</span>
+        </button>
+      </footer>
     </main>
     <dialog id="bill-dialog" aria-labelledby="form-title">
       <form id="bill-form" novalidate>

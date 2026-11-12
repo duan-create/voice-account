@@ -413,3 +413,144 @@ test("editing a record deleted elsewhere reports failure instead of silently ins
   assert.equal(await page.getByLabel("金额（元）").inputValue(), "99");
   assert.deepEqual(await readBills(), []);
 });
+
+async function waitForOfflineShell() {
+  await page.evaluate(async () => { await navigator.serviceWorker.ready; });
+  await page.reload();
+  await waitForReady();
+  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+}
+
+test("offline reload serves the full shell and manual CRUD without network", async () => {
+  await waitForOfflineShell();
+  await openForm();
+  await save();
+  await context.setOffline(true);
+  const response = await page.goto(`${origin}/index.html?offline=1`);
+  assert.equal(response.fromServiceWorker(), true);
+  await waitForReady();
+  assert.equal(await page.locator(".voice-button").isVisible(), false);
+  assert.match(await page.locator("#offline-status").innerText(), /离线.*手动记账/);
+  assert.equal(await page.locator(".bill-item").count(), 1);
+  assert.equal(await page.locator(".summary-grid").evaluate((element) => getComputedStyle(element).display), "grid");
+  const parser = await page.evaluate(async () => (await import("./js/voice-parser.js")).parseVoiceBill("吃饭花了二十八块"));
+  assert.equal(parser.amount, 28);
+  await openForm({ amount: "10", type: "收入" });
+  await save();
+  await page.locator(".bill-item-income").getByRole("button", { name: "编辑" }).click();
+  await page.getByLabel("金额（元）").fill("12");
+  await save();
+  assert.equal(await page.locator("#month-income").innerText(), "12.00");
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator(".bill-item-income").getByRole("button", { name: "删除" }).click();
+  await page.waitForFunction(() => document.querySelectorAll(".bill-item").length === 1);
+  assert.equal(await page.locator("#month-income").innerText(), "0.00");
+  await page.reload();
+  await waitForReady();
+  assert.equal(await page.locator("#month-expense").innerText(), "28.50");
+  const offlinePage = await context.newPage();
+  assert.equal((await offlinePage.goto(origin)).fromServiceWorker(), true);
+  await offlinePage.waitForFunction(() => !document.querySelector(".manual-button").disabled);
+  assert.equal(await offlinePage.locator("#month-expense").innerText(), "28.50");
+  assert.equal(await offlinePage.locator(".voice-button").isVisible(), false);
+});
+
+test("going offline cancels active voice input and reconnecting restores its entry", async () => {
+  await installSpeech();
+  await holdVoice();
+  await context.setOffline(true);
+  await page.waitForFunction(() => document.querySelector(".voice-button").hidden, null, { timeout: 2000 });
+  assert.equal(await page.locator(".voice-button").isVisible(), false);
+  assert.equal(await page.locator(".manual-button").isEnabled(), true);
+  await page.mouse.up();
+  await page.evaluate(() => { window.speech.result("收入一百元"); window.speech.end(); });
+  assert.equal(await page.locator("dialog[open]").count(), 0);
+  await context.setOffline(false);
+  await page.waitForFunction(() => !document.querySelector(".voice-button").hidden);
+  assert.equal(await page.locator(".voice-button").isVisible(), true);
+  assert.equal(await page.locator("#offline-status").isVisible(), false);
+  await holdVoice();
+  await page.mouse.up();
+  await page.evaluate(() => { window.speech.result("收入一百元"); window.speech.end(); });
+  assert.equal(await page.getByLabel("金额（元）").inputValue(), "100");
+  assert.deepEqual(await readBills(), []);
+});
+
+test("JSON backup reads every persisted field fresh and downloads offline without mutation", async () => {
+  await waitForReady();
+  const fixtures = [
+    { type: "收入", amount: 123.45, category: "其他", remark: "工资 <备份>", date: 1704038400000 },
+    { type: "支出", amount: 6, category: "交通", remark: "地铁", date: 1706716800000 }
+  ];
+  await page.evaluate(async (bills) => {
+    const { addBill } = await import("./js/db.js");
+    for (const bill of bills) await addBill(bill);
+  }, fixtures);
+  const records = await readBills();
+  await context.setOffline(true);
+  const downloading = page.waitForEvent("download", { timeout: 3000 });
+  await page.getByRole("button", { name: "导出备份", exact: true }).click({ timeout: 2000 });
+  const download = await downloading;
+  assert.match(download.suggestedFilename(), /^voice-account-bills-\d{4}-\d{2}-\d{2}\.json$/);
+  const backup = JSON.parse(await readFile(await download.path(), "utf8"));
+  assert.equal(backup.length, 2);
+  assert.deepEqual(backup.map(({ id, createdAt, ...bill }) => bill), [fixtures[1], fixtures[0]]);
+  assert.deepEqual(backup, records);
+  assert.deepEqual(await readBills(), records);
+  assert.match(await page.locator("#app-message").innerText(), /备份.*生成/);
+  assert.equal(await page.getByText("数据仅保存在本地浏览器，清除缓存会丢失，建议定期导出备份", { exact: true }).isVisible(), true);
+});
+
+test("empty backup is valid JSON and read failure reports an error without downloading", async () => {
+  await waitForReady();
+  const downloading = page.waitForEvent("download", { timeout: 3000 });
+  await page.getByRole("button", { name: "导出备份", exact: true }).click({ timeout: 2000 });
+  assert.deepEqual(JSON.parse(await readFile(await (await downloading).path(), "utf8")), []);
+  await page.evaluate(() => {
+    IDBDatabase.prototype.transaction = () => { throw new Error("Forced backup read failure"); };
+  });
+  let downloaded = false;
+  page.on("download", () => { downloaded = true; });
+  await page.getByRole("button", { name: "导出备份", exact: true }).click();
+  await page.waitForFunction(() => document.querySelector("#app-message").dataset.error === "true");
+  assert.match(await page.locator("#app-message").innerText(), /导出失败/);
+  assert.equal(downloaded, false);
+  assert.equal(await page.locator(".manual-button").isEnabled(), true);
+});
+
+test("date groups use local calendar days and disappear when their last bill is removed", async () => {
+  await page.clock.install({ time: new Date("2026-11-01T08:00:00+08:00") });
+  await openForm({ amount: "1", date: "2026-10-30" });
+  await save();
+  await openForm({ amount: "2", date: "2026-10-31" });
+  await save();
+  await openForm({ amount: "3", date: "2026-11-01" });
+  await save();
+  assert.deepEqual(await page.locator(".bill-group-title").allTextContents(), ["今天", "昨天", "更早"]);
+  assert.deepEqual(await page.locator(".bill-group").evaluateAll((groups) => groups.map((group) => [...group.querySelectorAll("time")].map((time) => time.dateTime))), [["2026-11-01"], ["2026-10-31"], ["2026-10-30"]]);
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.locator(".bill-group").first().getByRole("button", { name: "删除" }).click();
+  await page.waitForFunction(() => document.querySelectorAll(".bill-item").length === 2);
+  assert.deepEqual(await page.locator(".bill-group-title").allTextContents(), ["昨天", "更早"]);
+});
+
+test("dialog follows a reduced visual viewport and keeps focused fields reachable", async () => {
+  await openForm();
+  await page.evaluate(() => {
+    Object.defineProperties(visualViewport, {
+      height: { configurable: true, value: 340 },
+      offsetTop: { configurable: true, value: 70 }
+    });
+    visualViewport.dispatchEvent(new Event("resize"));
+  });
+  await page.getByLabel("备注", { exact: true }).focus();
+  await page.waitForFunction(() => {
+    const bounds = document.querySelector("#bill-dialog").getBoundingClientRect();
+    return bounds.top >= 70 && bounds.bottom <= 410;
+  }, null, { timeout: 2000 });
+  const field = await page.getByLabel("备注", { exact: true }).boundingBox();
+  assert.ok(field.y >= 70 && field.y + field.height <= 410);
+  await page.getByRole("button", { name: "确认", exact: true }).click();
+  await page.locator("#bill-dialog").waitFor({ state: "hidden" });
+  assert.equal((await readBills()).length, 1);
+});

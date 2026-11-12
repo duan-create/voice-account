@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output and generated PWA files
+dist/
+build/
+out/
+dev-dist/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.astro/
+
+# Tool caches
+.vite/
+.cache/
+.parcel-cache/
+.turbo/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# Test output
+coverage/
+playwright-report/
+test-results/
+
+# Local environment variables (keep examples versioned)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs
+logs/
+*.log
+
+# Editor and temporary files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+*~
+
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini

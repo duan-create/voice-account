@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>语音记账</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="manifest" href="./manifest.json">
+    <script src="./js/app.js" defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <h1>语音记账</h1>
+    </header>
+    <main id="app"></main>
+    <nav class="app-nav" aria-label="底部导航"></nav>
+    <script>
+      if ("serviceWorker" in navigator && window.isSecureContext && location.protocol !== "file:") {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./sw.js").catch((error) => {
+            console.error("Service worker registration failed:", error);
+          });
+        });
+      }
+    </script>
+  </body>
+</html>

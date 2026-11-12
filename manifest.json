@@ -1,0 +1,11 @@
+{
+  "name": "语音记账",
+  "short_name": "语音记账",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": []
+}

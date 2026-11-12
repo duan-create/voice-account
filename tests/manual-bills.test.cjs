@@ -15,7 +15,7 @@ let origin;
 const root = join(__dirname, "..");
 
 before(async () => {
-  const files = new Set(["index.html", "capacitor.js", "css/style.css", "js/app.js", "js/db.js", "js/db.selftest.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "manifest.json", "sw.js"]);
+  const files = new Set(["index.html", "capacitor.js", "css/style.css", "js/app.js", "js/db.js", "js/db.selftest.js", "js/budget-db.js", "js/finance.js", "js/finance-ui.js", "js/charts.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "manifest.json", "sw.js"]);
   const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json" };
   server = createServer(async (request, response) => {
     const path = new URL(request.url, "http://localhost").pathname.slice(1) || "index.html";
@@ -564,4 +564,261 @@ test("dialog follows a reduced visual viewport and keeps focused fields reachabl
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await page.locator("#bill-dialog").waitFor({ state: "hidden" });
   assert.equal((await readBills()).length, 1);
+});
+
+test("v1 database upgrades without losing bill fields or the auto-increment key", async () => {
+  await context.close();
+  context = await browser.newContext({ viewport: { width: 375, height: 812 }, timezoneId: "Asia/Shanghai" });
+  page = await context.newPage();
+  await page.goto(`${origin}/manifest.json`);
+  const legacy = { id: 17, type: "支出", amount: 36.5, category: "餐饮", remark: "升级前账单", date: 1793448000000, createdAt: 1793448000123 };
+  await page.evaluate((bill) => new Promise((resolve, reject) => {
+    const request = indexedDB.open("voice-account-db", 1);
+    request.onupgradeneeded = () => request.result.createObjectStore("bills", { keyPath: "id", autoIncrement: true });
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const transaction = db.transaction("bills", "readwrite");
+      transaction.objectStore("bills").add(bill);
+      transaction.oncomplete = () => { db.close(); resolve(); };
+    };
+  }), legacy);
+  await page.goto(origin);
+  await waitForReady();
+  assert.deepEqual(await readBills(), [legacy]);
+  const schema = await page.evaluate(async () => {
+    const db = await (await import("./js/db.js")).initDB();
+    const store = db.transaction("bills").objectStore("bills");
+    return { version: db.version, stores: [...db.objectStoreNames], keyPath: store.keyPath, autoIncrement: store.autoIncrement };
+  });
+  assert.deepEqual(schema, { version: 2, stores: ["bills", "budgets"], keyPath: "id", autoIncrement: true });
+  await openForm();
+  await save();
+  assert.ok((await readBills()).some((bill) => bill.id === 18));
+});
+
+test("budget persistence is independent, validates values and survives reload without altering bills", async () => {
+  await openForm();
+  await save();
+  const before = await readBills();
+  const results = await page.evaluate(async () => {
+    const api = await import("./js/budget-db.js");
+    const initial = await api.getBudget();
+    await api.saveBudget({ total: 1000.5, categories: { 餐饮: 300, 交通: 50 } });
+    const saved = await api.getBudget();
+    let rejected = 0;
+    for (const total of [-1, 0, NaN, Infinity, 1.001, 0.0000000001, 1.0000000001]) {
+      try { await api.saveBudget({ total, categories: {} }); } catch { rejected += 1; }
+    }
+    return { initial, saved, rejected, after: await api.getBudget() };
+  });
+  assert.deepEqual(results.initial, { total: null, categories: {} });
+  assert.deepEqual(results.saved, { total: 1000.5, categories: { 餐饮: 300, 交通: 50 } });
+  assert.equal(results.rejected, 7);
+  assert.deepEqual(results.after, results.saved);
+  await page.reload();
+  await waitForReady();
+  assert.deepEqual(await page.evaluate(async () => (await import("./js/budget-db.js")).getBudget()), results.saved);
+  assert.deepEqual(await readBills(), before);
+});
+
+async function openBudget() {
+  await waitForReady();
+  await page.locator("#open-budget").click({ timeout: 2000 });
+  await page.locator("#budget-dialog[open]").waitFor();
+}
+
+async function saveBudgetForm() {
+  await page.locator("#budget-form").getByRole("button", { name: "保存预算" }).click();
+  await page.locator("#budget-dialog").waitFor({ state: "hidden" });
+}
+
+test("budget form persists limits, validates and warns only for this month's expense categories", async () => {
+  await openBudget();
+  await page.getByLabel("月度总预算（元）").fill("0");
+  await page.locator("#budget-form").getByRole("button", { name: "保存预算" }).click();
+  assert.match(await page.locator("#budget-message").innerText(), /大于 0/);
+  await page.getByLabel("月度总预算（元）").fill("1000");
+  await page.getByLabel("餐饮预算（元）").fill("20");
+  await saveBudgetForm();
+  await openForm({ amount: "25" });
+  await save();
+  assert.match(await page.locator("#budget-overview").innerText(), /975\.00/);
+  assert.match(await page.locator(".bill-item.budget-exceeded").innerText(), /餐饮.*|分类超支/);
+  await openForm({ amount: "6", category: "交通" });
+  await save();
+  await openForm({ amount: "10", type: "收入" });
+  await save();
+  await openForm({ amount: "99", date: "2020-01-01" });
+  await save();
+  assert.equal(await page.locator(".bill-item.budget-exceeded").count(), 1);
+  await page.reload();
+  await openBudget();
+  assert.equal(await page.getByLabel("餐饮预算（元）").inputValue(), "20");
+  await page.getByLabel("餐饮预算（元）").fill("");
+  await saveBudgetForm();
+  assert.equal(await page.locator(".bill-item.budget-exceeded").count(), 0);
+  await openBudget();
+  await page.getByLabel("月度总预算（元）").fill("2");
+  await page.locator("#cancel-budget").click();
+  assert.equal((await page.evaluate(async () => (await import("./js/budget-db.js")).getBudget())).total, 1000);
+});
+
+test("statistics charts render pixels, select slices and legends, and filter monthly expense details", async () => {
+  await openForm({ amount: "30", remark: "当月餐饮" });
+  await save();
+  await openForm({ amount: "10", category: "交通", remark: "当月地铁" });
+  await save();
+  await openForm({ amount: "100", type: "收入", remark: "收入不进饼图" });
+  await save();
+  await openForm({ amount: "99", date: "2020-01-01", remark: "历史不进明细" });
+  await save();
+  await page.getByRole("tab", { name: "统计", exact: true }).click({ timeout: 2000 });
+  assert.equal(await page.locator("#home-view").isVisible(), false);
+  for (const id of ["#category-chart", "#trend-chart"]) {
+    await page.waitForFunction((id) => {
+      const canvas = document.querySelector(id);
+      return canvas.width > 0 && canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data.some((value, index) => index % 4 === 3 && value > 0);
+    }, id);
+  }
+  assert.match(await page.locator("#category-legend").innerText(), /75%/);
+  await page.locator('#category-legend button[data-category="餐饮"]').click();
+  assert.match(await page.locator("#category-details").innerText(), /当月餐饮/);
+  assert.doesNotMatch(await page.locator("#category-details").innerText(), /收入不进饼图|历史不进明细|当月地铁/);
+  // The 25% traffic slice is at the upper-left of a clockwise pie starting at 12 o'clock.
+  const bounds = await page.locator("#category-chart").boundingBox();
+  await page.mouse.click(bounds.x + bounds.width * 0.28, bounds.y + bounds.height * 0.28);
+  assert.match(await page.locator("#category-details").innerText(), /当月地铁/);
+  assert.doesNotMatch(await page.locator("#category-details").innerText(), /当月餐饮/);
+  await page.getByRole("tab", { name: "首页", exact: true }).click();
+  assert.equal(await page.locator(".manual-button").isVisible(), true);
+});
+
+test("failed budget saves preserve values and limits; budget read failures do not block billing", async () => {
+  await openBudget();
+  await page.getByLabel("月度总预算（元）").fill("100");
+  await page.evaluate(() => {
+    window.originalTransaction = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (name, mode, ...rest) {
+      if (name === "budgets" && mode === "readwrite") throw new Error("Forced budget save failure");
+      return window.originalTransaction.call(this, name, mode, ...rest);
+    };
+  });
+  await page.locator("#budget-form").getByRole("button", { name: "保存预算" }).click();
+  await page.waitForFunction(() => document.querySelector("#budget-message").textContent.includes("失败"));
+  assert.equal(await page.getByLabel("月度总预算（元）").inputValue(), "100");
+  assert.equal((await page.evaluate(async () => (await import("./js/budget-db.js")).getBudget())).total, null);
+  await page.locator("#cancel-budget").click();
+  await page.addInitScript(() => {
+    const original = IDBDatabase.prototype.transaction;
+    IDBDatabase.prototype.transaction = function (name, mode, ...rest) {
+      if (name === "budgets" && mode === "readonly") throw new Error("Forced budget read failure");
+      return original.call(this, name, mode, ...rest);
+    };
+  });
+  await page.reload();
+  await openForm();
+  await save();
+  assert.equal((await readBills()).length, 1);
+  assert.match(await page.locator("#budget-overview").innerText(), /预算.*加载失败/);
+});
+
+test("month rollover retains budget limits with no carryover and refreshes an open page", async () => {
+  await page.clock.install({ time: new Date("2026-01-31T23:59:50+08:00") });
+  await openBudget();
+  await page.getByLabel("月度总预算（元）").fill("100");
+  await saveBudgetForm();
+  await openForm({ amount: "120" });
+  await save();
+  assert.match(await page.locator("#budget-overview").innerText(), /超支[\s\S]*20\.00/);
+  await page.clock.fastForward(20000);
+  await page.waitForFunction(() => document.querySelector("#month-expense").textContent === "0.00");
+  assert.match(await page.locator("#budget-overview").innerText(), /100\.00/);
+  assert.equal((await page.evaluate(async () => (await import("./js/budget-db.js")).getBudget())).total, 100);
+});
+
+test("budgets and Canvas statistics remain available on an offline reload", async () => {
+  await waitForOfflineShell();
+  await openBudget();
+  await page.getByLabel("月度总预算（元）").fill("100");
+  await saveBudgetForm();
+  await openForm({ amount: "20" });
+  await save();
+  await context.setOffline(true);
+  await page.reload();
+  await waitForReady();
+  assert.match(await page.locator("#budget-overview").innerText(), /80\.00/);
+  await page.getByRole("tab", { name: "统计", exact: true }).click();
+  assert.match(await page.locator("#category-legend").innerText(), /20\.00/);
+  await page.getByRole("tab", { name: "首页", exact: true }).click();
+  await openBudget();
+  await page.getByLabel("月度总预算（元）").fill("200");
+  await saveBudgetForm();
+  assert.match(await page.locator("#budget-overview").innerText(), /180\.00/);
+});
+
+test("summary amounts fit on one line across small mobile and desktop viewports", async () => {
+  await openForm({ amount: "8500", type: "收入" });
+  await save();
+  await openForm({ amount: "2533.50" });
+  await save();
+  for (const width of [320, 375, 1280]) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.waitForFunction(() => [...document.querySelectorAll(".summary-amount")].every((element) => {
+      const bounds = element.getBoundingClientRect();
+      const card = element.closest(".summary-card").getBoundingClientRect();
+      return bounds.height <= parseFloat(getComputedStyle(element).fontSize) * 1.4 && bounds.right <= card.right - 8;
+    }), null, { timeout: 2000 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+});
+
+test("budget fields follow the keyboard viewport and reduced motion disables decorative animations", async () => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openForm();
+  await save();
+  assert.equal(await page.locator(".bill-item").evaluate((element) => getComputedStyle(element).animationName), "none");
+  await openBudget();
+  await page.evaluate(() => {
+    Object.defineProperties(visualViewport, {
+      height: { configurable: true, value: 340 }, offsetTop: { configurable: true, value: 70 }
+    });
+    visualViewport.dispatchEvent(new Event("resize"));
+  });
+  await page.getByLabel("其他预算（元）").focus();
+  await page.waitForFunction(() => {
+    const field = document.querySelector('[name="其他"]').getBoundingClientRect();
+    return field.top >= 70 && field.bottom <= 410;
+  }, null, { timeout: 2000 });
+  await page.locator("#cancel-budget").click();
+});
+
+test("legacy database console self-test remains isolated and passes all checks", async () => {
+  await waitForReady();
+  const before = await readBills();
+  const result = await page.evaluate(async () => (await import("./js/db.selftest.js")).runDBSelfTest());
+  assert.equal(result.passed, 17);
+  assert.deepEqual(await readBills(), before);
+});
+
+test("an aborted budget transaction keeps all previously committed limits intact", async () => {
+  await waitForReady();
+  const result = await page.evaluate(async () => {
+    const api = await import("./js/budget-db.js");
+    const original = { total: 1000, categories: { 餐饮: 300, 交通: 50 } };
+    await api.saveBudget(original);
+    const put = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = function (...args) {
+      const request = put.apply(this, args);
+      if (this.name === "budgets") this.transaction.abort();
+      return request;
+    };
+    let rejected = false;
+    try { await api.saveBudget({ total: 2000, categories: { 购物: 500 } }); }
+    catch { rejected = true; }
+    finally { IDBObjectStore.prototype.put = put; }
+    return { rejected, saved: await api.getBudget() };
+  });
+  assert.equal(result.rejected, true);
+  assert.deepEqual(result.saved, { total: 1000, categories: { 餐饮: 300, 交通: 50 } });
 });

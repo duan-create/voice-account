@@ -1,5 +1,7 @@
 import { initDB, addBill, getBills, updateBill, deleteBill, getMonthSummary } from "./db.js";
 import { setupVoiceInput } from "./voice.js";
+import { categoryFor } from "./finance.js";
+import { setupFinanceUI } from "./finance-ui.js";
 
 const manualButton = document.querySelector(".manual-button");
 const voiceButton = document.querySelector(".voice-button");
@@ -21,6 +23,26 @@ let editingId = null;
 let busy = false;
 let ready = false;
 let voiceActive = false;
+let toastTimer;
+let currentDay = localDate();
+let refreshInProgress = false;
+const finance = setupFinanceUI({ showMessage, updateDialogViewport });
+
+function fitSummaryAmounts() {
+  for (const element of [incomeAmount, expenseAmount]) {
+    element.style.fontSize = "2rem";
+    const fontSize = parseFloat(getComputedStyle(element).fontSize);
+    if (element.scrollWidth > element.clientWidth && element.clientWidth > 0) {
+      element.style.fontSize = `${fontSize * element.clientWidth / element.scrollWidth}px`;
+    }
+  }
+}
+let summaryWidth = 0;
+new ResizeObserver(([entry]) => {
+  if (entry.contentRect.width === summaryWidth) return;
+  summaryWidth = entry.contentRect.width;
+  fitSummaryAmounts();
+}).observe(document.querySelector(".summary-grid"));
 
 function localDate(timestamp = Date.now()) {
   const date = new Date(timestamp);
@@ -30,6 +52,9 @@ function localDate(timestamp = Date.now()) {
 function showMessage(message, error = false) {
   appMessage.textContent = message;
   appMessage.dataset.error = String(error);
+  appMessage.classList.add("visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => appMessage.classList.remove("visible"), error ? 8000 : 4000);
 }
 
 function setBusy(value) {
@@ -40,6 +65,7 @@ function setBusy(value) {
   fields.namedItem("form-fields").disabled = value;
   list.querySelectorAll("button").forEach((button) => { button.disabled = value || !ready || voiceActive; });
   form.setAttribute("aria-busy", String(value));
+  finance.setAvailable(!value && ready && !voiceActive);
 }
 
 function renderBills(records) {
@@ -50,10 +76,16 @@ function renderBills(records) {
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayDate = localDate(yesterday);
   const groups = new Map([ ["今天", []], ["昨天", []], ["更早", []] ]);
-  for (const bill of records) {
+  for (const [index, bill] of records.entries()) {
     const item = template.content.firstElementChild.cloneNode(true);
     item.dataset.id = bill.id;
     item.classList.toggle("bill-item-income", bill.type === "收入");
+    item.style.setProperty("--entry-delay", `${Math.min(index, 8) * 35}ms`);
+    const category = categoryFor(bill.category);
+    const icon = item.querySelector(".bill-icon");
+    icon.textContent = category.icon;
+    icon.style.color = category.color;
+    icon.style.background = category.background;
     item.querySelector(".bill-category").textContent = bill.category;
     const date = item.querySelector("time");
     date.dateTime = localDate(bill.date);
@@ -89,9 +121,11 @@ async function refreshBills() {
     bills = records;
     incomeAmount.textContent = money.format(summary.income);
     expenseAmount.textContent = money.format(summary.expense);
+    fitSummaryAmounts();
     listState.textContent = records.length ? "" : "暂无账单";
     listState.hidden = records.length > 0;
     ready = true;
+    await finance.update(records);
   } catch (error) {
     // Do not leave stale totals or actionable stale rows after a failed refresh.
     ready = false;
@@ -101,6 +135,7 @@ async function refreshBills() {
     expenseAmount.textContent = "--";
     listState.textContent = "账单加载失败，请刷新页面重试。";
     listState.hidden = false;
+    finance.clear();
     throw error;
   }
 }
@@ -124,7 +159,7 @@ function openForm(bill = null) {
 setupVoiceInput({
   button: voiceButton,
   status: voiceStatus,
-  isAvailable: () => navigator.onLine && ready && !busy && !dialog.open,
+  isAvailable: () => navigator.onLine && ready && !busy && !document.querySelector("dialog[open]"),
   setActive(active) {
     voiceActive = active;
     setBusy(busy);
@@ -157,12 +192,13 @@ window.addEventListener("offline", updateConnection);
 updateConnection();
 
 function updateDialogViewport() {
-  if (!dialog.open) return;
+  const activeDialog = document.querySelector("dialog[open]");
+  if (!activeDialog) return;
   const viewport = window.visualViewport;
-  dialog.style.setProperty("--dialog-viewport-height", `${viewport?.height ?? window.innerHeight}px`);
-  dialog.style.setProperty("--dialog-viewport-top", `${viewport?.offsetTop ?? 0}px`);
+  activeDialog.style.setProperty("--dialog-viewport-height", `${viewport?.height ?? window.innerHeight}px`);
+  activeDialog.style.setProperty("--dialog-viewport-top", `${viewport?.offsetTop ?? 0}px`);
   requestAnimationFrame(() => {
-    if (dialog.open && form.contains(document.activeElement)) {
+    if (activeDialog.open && activeDialog.contains(document.activeElement)) {
       document.activeElement.scrollIntoView({ block: "nearest" });
     }
   });
@@ -172,6 +208,25 @@ window.visualViewport?.addEventListener("resize", updateDialogViewport);
 window.visualViewport?.addEventListener("scroll", updateDialogViewport);
 window.addEventListener("resize", updateDialogViewport);
 form.addEventListener("focusin", updateDialogViewport);
+
+// Recompute calendar-based views on an open page, including after background sleep.
+async function refreshCalendar() {
+  if (!ready || busy || voiceActive || refreshInProgress || localDate() === currentDay) return;
+  refreshInProgress = true;
+  setBusy(true);
+  try {
+    await refreshBills();
+    currentDay = localDate();
+  } catch (error) {
+    showMessage("日期切换后数据刷新失败，请刷新页面。", true);
+  } finally {
+    refreshInProgress = false;
+    setBusy(false);
+  }
+}
+setInterval(refreshCalendar, 10000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshCalendar(); });
+window.addEventListener("focus", refreshCalendar);
 
 exportButton.addEventListener("click", async () => {
   if (busy || !ready || voiceActive) return;

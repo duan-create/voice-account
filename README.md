@@ -49,6 +49,38 @@ The shell initialization step did not generate an APK, signing key or release bu
 Android WebView speech recognition and JSON downloads must be tested on a
 device later; browser support does not guarantee the same native behavior.
 
+## Statistics And Budgets
+
+The Statistics tab draws a current-month category expense pie and six calendar
+months of income/expense trends with native Canvas. Select a pie slice or its
+legend entry to see that category's current-month expense records. A monthly
+data table provides a text alternative to the trend chart.
+
+Monthly total and six independent category limits are stored in the separate
+`budgets` store in IndexedDB version 2. The upgrade preserves the original
+`bills` store, record fields and auto-increment IDs. Limits persist across months;
+only spending and remaining amounts are recalculated, with no rollover. Blank
+limits disable the corresponding warning. Warnings never prevent bill entry.
+The existing JSON export remains a bills-only backup, not a budget backup.
+
+New modules are included in the offline shell and native resource sync. After
+an installed PWA update, close all old tabs and reopen it to activate the new
+worker. On an open page, calendar-based views refresh at the next periodic check
+or when returning from the background.
+
+```sh
+npm test
+npm exec --yes --package=playwright -- node --test tests/manual-bills.test.cjs
+npx cap sync android
+```
+
+The browser suite uses Chrome on Windows by default; set `BROWSER_PATH` for
+another Chrome/Chromium executable. It covers legacy data migration, persistent
+budgets, transaction failures, month changes, chart selection, offline CRUD,
+voice confirmation, small-screen amounts and simulated keyboard viewports.
+Physical keyboard/safe-area behavior and Android WebView still require device
+testing. Waveform bars are a recording-state animation, not measured audio.
+
 ## Android Debug 构建指南
 
 只构建用于真机测试的 Debug APK，不配置 Release 签名或商店发布。

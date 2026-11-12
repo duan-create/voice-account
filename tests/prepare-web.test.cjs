@@ -13,7 +13,7 @@ test("web preparation copies only app assets and the official runtime, replacing
   const result = spawnSync(process.execPath, ["scripts/prepare-web.cjs"], { cwd: root, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual((await readdir(webDir)).sort(), ["capacitor.js", "capacitor.js.map", "css", "index.html", "js", "manifest.json", "sw.js"]);
-  const assets = ["index.html", "manifest.json", "sw.js", "css/style.css", "js/app.js", "js/db.js", "js/db.selftest.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "js/vendor/nzh-LICENSE.txt"];
+  const assets = ["index.html", "manifest.json", "sw.js", "css/style.css", "js/app.js", "js/db.js", "js/db.selftest.js", "js/budget-db.js", "js/finance.js", "js/finance-ui.js", "js/charts.js", "js/voice.js", "js/voice-parser.js", "js/vendor/nzh-cn.js", "js/vendor/nzh-LICENSE.txt"];
   for (const asset of assets) {
     assert.deepEqual(await readFile(join(webDir, asset)), await readFile(join(root, asset)), `${asset} must stay unchanged`);
   }

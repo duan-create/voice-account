@@ -15,9 +15,13 @@ export function createBillDB(name = "voice-account-db") {
   function initDB() {
     if (!dbPromise) {
       dbPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(name, 1);
+        const request = indexedDB.open(name, 2);
         request.onupgradeneeded = () => {
-          request.result.createObjectStore("bills", { keyPath: "id", autoIncrement: true });
+          const db = request.result;
+          if (!db.objectStoreNames.contains("bills")) {
+            db.createObjectStore("bills", { keyPath: "id", autoIncrement: true });
+          }
+          if (!db.objectStoreNames.contains("budgets")) db.createObjectStore("budgets");
         };
         request.onsuccess = () => {
           const db = request.result;

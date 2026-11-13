@@ -173,11 +173,32 @@ test('search defaults to this month, persists ten histories and ranking opens ex
   assert.match(await page.locator('#search-category-filter').textContent(), /餐饮/);
 });
 
+test('automatic backup history restores a selected copy and retains the pre-restore ledger', async () => {
+  await openForm({ amount: '15', remark: '备份前' }); await save();
+  await page.locator('#open-settings').click();
+  await page.locator('#backup-now').click();
+  await page.waitForFunction(() => document.querySelector('#backup-records').children.length === 2);
+  await page.locator('#close-settings').click();
+  await openForm({ amount: '25', remark: '备份后' }); await save();
+  await page.locator('#open-settings').click();
+  await page.locator('#backup-records .manage-row').first().getByRole('button', { name: '恢复', exact: true }).click();
+  await page.locator('#delete-dialog[open]').waitFor(); await page.locator('#confirm-delete').click();
+  await page.waitForFunction(() => document.querySelector('#app-message').textContent === '备份已恢复。');
+  assert.equal((await readBills()).length, 1);
+  const copies = await page.evaluate(async () => {
+    const store = (await import('./js/auto-backup.js')).createBackupStore();
+    const items = await store.list(); return Promise.all(items.map(i => store.read(i.id)));
+  });
+  assert.equal(copies.length, 3);
+  assert.ok(copies.some(c => c.stores.bills.length === 2));
+  assert.equal(copies.every(c => !Object.hasOwn(c.stores, 'copies')), true);
+});
+
 test('complete backup and CSV/Excel exports work offline and CSV import previews before writing', async () => {
   await openForm({ remark: '导出,"备注"', amount: '12.50' }); await save();
   for (const extension of ['json', 'csv', 'xlsx']) {
     const download = page.waitForEvent('download');
-    await page.locator(`[data-export="${extension}"]`).click();
+    await page.locator(`#home-view [data-export="${extension}"]`).click();
     const file = await download; assert.ok(file.suggestedFilename().endsWith(`.${extension}`));
     if (extension === 'json') { const data = JSON.parse(await readFile(await file.path(), 'utf8')); assert.equal(data.format, 'voice-account'); assert.equal(data.stores.bills.length, 1); }
     if (extension === 'xlsx') { const bytes = await readFile(await file.path()); assert.equal(bytes.toString('ascii', 0, 2), 'PK'); }

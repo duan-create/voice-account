@@ -2,6 +2,8 @@ import { ledger } from './ledger-api.js';
 import { encodeCSV, previewCSV, importCSV, snapshot, restore, validateSnapshot, HEADERS, tableRows } from './backup.js';
 import { dateKey } from './calendar.js';
 import { isAndroidNative } from './native-voice.js';
+import { createAutoBackupStore } from './auto-backup.js';
+import { requestDelete } from './ui.js';
 
 export async function saveFile(name, mime, blob) {
   if (isAndroidNative()) {
@@ -13,7 +15,9 @@ export async function saveFile(name, mime, blob) {
   const url = URL.createObjectURL(blob), link = document.createElement('a');
   link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
-export function setupBackup({ refresh, showMessage, viewport }) {
+export function setupBackup({ refresh, showMessage, viewport, setBusy = () => {} }) {
+  const copies = createAutoBackupStore();
+  const settings = document.querySelector('#settings-view');
   const dialog = document.querySelector('#import-dialog');
   let pending = null, running = false;
   async function exportFile(format) {
@@ -58,10 +62,61 @@ export function setupBackup({ refresh, showMessage, viewport }) {
   document.querySelector('#confirm-import').onclick = async () => {
     if (!pending || running) return;
     running = true; document.querySelector('#confirm-import').disabled = true;
+    setBusy(true);
     try {
-      if (pending.input) await restore(pending.input, ledger); else await importCSV(pending.rows, ledger);
+      if (pending.input) { await automatic(); await restore(pending.input, ledger); } else await importCSV(pending.rows, ledger);
       pending = null; dialog.close(); await refresh(); showMessage('导入完成。');
     } catch (e) { showMessage(`导入失败：${e.message}`, true); }
-    finally { running = false; document.querySelector('#confirm-import').disabled = false; }
+    finally { running = false; setBusy(false); document.querySelector('#confirm-import').disabled = false; }
   };
+  async function automatic() {
+    const result = await copies.save(await snapshot(ledger));
+    if (result.warning) showMessage(result.warning, true);
+    return result;
+  }
+  async function renderCopies() {
+    const [items, directory] = await Promise.all([copies.list(), copies.directory()]);
+    document.querySelector('#backup-directory-status').textContent = directory.authorized ? '公共目录已授权，自动备份会同步副本。卸载重装后需重新授权。' : '仅保存在应用私有存储，卸载或清除数据会删除这些备份。';
+    document.querySelector('#choose-backup-directory').hidden = !isAndroidNative();
+    document.querySelector('#backup-records').replaceChildren(...items.map(item => {
+      const row = document.createElement('li'); row.className = 'manage-row';
+      const label = document.createElement('div'); label.textContent = new Date(item.createdAt).toLocaleString('zh-CN'); row.append(label);
+      for (const [title, action] of [
+        ['导出', async () => { const data = await copies.read(item.id); await saveFile(`voice-account-backup-${item.createdAt}.json`, 'application/json', new Blob([JSON.stringify(data, null, 2)])); showMessage('备份文件已生成。'); }],
+        ['恢复', async () => {
+          // Read before rotation: the selected oldest copy may be evicted by the safety backup.
+          const data = await copies.read(item.id); validateSnapshot(data);
+          if (!await requestDelete('恢复将替换全部本地账单、账户与预算。恢复前会自动备份当前数据，是否继续？', viewport)) return;
+          setBusy(true);
+          try { await automatic(); await restore(data, ledger); await refresh(); await renderCopies(); showMessage('备份已恢复。'); }
+          finally { setBusy(false); }
+        }]
+      ]) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'text-button'; button.textContent = title;
+        button.onclick = async () => {
+          if (running) return; running = true;
+          try { await action(); } catch (e) { showMessage(`操作未完成：${e.message}`, true); }
+          finally { running = false; }
+        }; row.append(button);
+      }
+      return row;
+    }));
+    document.querySelector('#backup-records-empty').hidden = items.length > 0;
+  }
+  document.querySelector('#open-settings').onclick = async () => {
+    settings.hidden = false;
+    try { await renderCopies(); } catch (e) { showMessage(`备份列表加载失败：${e.message}`, true); }
+  };
+  document.querySelector('#close-settings').onclick = () => { settings.hidden = true; document.querySelector('#open-settings').focus(); };
+  document.querySelector('#backup-now').onclick = async () => {
+    if (running) return; running = true;
+    try { await automatic(); await renderCopies(); showMessage('本地备份已完成。'); }
+    catch (e) { showMessage(`备份失败：${e.message}`, true); }
+    finally { running = false; }
+  };
+  document.querySelector('#choose-backup-directory').onclick = async () => {
+    try { await copies.chooseDirectory(); await renderCopies(); showMessage('公共目录已授权并同步副本。'); }
+    catch (e) { showMessage(`目录授权或同步未完成：${e.message}`, true); }
+  };
+  return { automatic };
 }

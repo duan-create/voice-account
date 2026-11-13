@@ -12,7 +12,7 @@ import { setupPlans } from './plans-ui.js';
 import { setupSearch } from './search-ui.js';
 const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
 const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage, onDisplay: () => finance.decorate() });
-setupBackup({ refresh: refreshBills, showMessage, viewport: updateDialogViewport });
+const backup = setupBackup({ refresh: refreshBills, showMessage, viewport: updateDialogViewport, setBusy });
 const plans = setupPlans({ refresh: refreshBills, showMessage, viewport: updateDialogViewport, addAccount: () => { document.querySelector('#assets-tab').click(); assets.openAccount(); } });
 
 const manualButton = document.querySelector(".manual-button");
@@ -386,6 +386,8 @@ try {
   setBusy(true);
   const db = await initDB();
   console.info(`[DB] Initialized: ${db.name}, version ${db.version}`);
+  try { await backup.automatic(); }
+  catch (e) { showMessage(`自动备份未完成：${e.message}，原有数据未修改，请导出备份。`, true); }
   await ledger.ensureDefaultAccounts();
   await plans.sync();
   await refreshBills();

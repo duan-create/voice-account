@@ -1,19 +1,31 @@
 # Voice Account PWA / Android Shell
 
+## 2026-11-13 本轮优化验收
+
+- 视觉采用 `#165DFF`、浅灰底、微透明白面板与细边框，默认分类使用本地线性图标；自定义分类图标保持用户设定。日历红收绿支与净收支底色保留，金额滚动240ms，支持减少动态效果。
+- `npm test`：120/120；涵盖历史账单/预算迁移、账户初始化幂等性、余额冲销、转账和存钱守恒、搜索边界、年度统计、自动备份保留与写入失败。
+- Playwright全量：58/58；涵盖记账增删改查、搜索详情/历史/年度联动、备份恢复、无账户引导、离线重载、语音桥接状态、320px小屏/大金额/软键盘视口及预算不受历史筛选影响。
+- `node --test tests/whisper-assets.test.cjs tests/cloud-android.test.cjs`：4/4；模型缺失/损坏明确拒绝、云端权限幂等配置通过。actionlint通过。
+- JDK21纯Java录音/静音/时长与定时计算测试通过；`npx cap sync android`通过，37个网页文件与原生资产SHA256一致。tiny文件实测SHA256匹配固定版本元数据，旧base生成文件已移除且不会进入Git。
+- 本机直连Hugging Face超时，验证时通过镜像获取相同固定版本并核对内容哈希；项目及Actions下载地址仍为官方Hugging Face固定提交。构建失败应检查下载连通性，不跳过校验。
+- **未完成项仅限外部验证**：本机没有SDK/NDK，未编译本轮APK、未运行安卓仪器测试或手机试录、未触发远程Actions。浏览器原生桥接测试使用替身，不代表JNI推理、SAF目录授权或真机提速已通过。更新后需云端构建，再在飞行模式下验证识别、公共备份落盘和覆盖安装保留数据。
+
 ## 个人记账系统使用入口
 
 | 入口 | 功能 |
 | --- | --- |
 | 首页 | 月历每日红色收入 / 绿色支出；月份切换；点日期筛选当日账单；编辑、删除；当月预算；按住说话及手动记账 |
-| 顶部放大镜 | 按备注 / 分类、金额、日期、收支类型组合搜索；保留最近 10 次查询，搜索结果可以编辑和删除 |
+| 顶部放大镜 | 独立全屏搜索，默认当月；按备注 / 分类、金额、日期、收支类型与账户筛选；最近10次查询可复用或清空；点结果查看详情、编辑和删除 |
+| 顶部设置 | 私有自动备份记录、立即备份、恢复及导出；安卓可授权本机公共目录同步副本 |
 | 资产 | 银行 / 自定义账户、初始余额、资产负债与净资产、内部转账、资产流水与趋势、分类图标 / 颜色 / 语音别名管理 |
-| 统计 | 所选月份分类饼图、点选扇区 / 图例查看明细、分类排行、近 6 个月对比；年度模式展示所选年份 12 个月收支 |
+| 统计 | 月 / 年分类饼图、收支分类排行榜、明细联动搜索；月度近6个月折线、年度12个月收支柱状图；箭头切换月份或年份 |
 | 计划 | 存钱目标、每日资金划转打卡、打卡记录；每日 / 每周提醒及自动记账计划；通知授权 |
 | 首页底部 | CSV / Excel 导出、CSV 预览后批量导入、完整 JSON 备份与恢复；保留旧版账单 JSON 导出 |
 
 历史账单保持原值和 ID，默认不指定账户；账户与账单关联采用独立表。
 预算额度跨月保留，只重新计算当月用量。转账 / 存钱不计入收支，不凭空增加资产。
 新分类可以设置语音别名，只有唯一明确匹配才填入；金额仍使用原有解析规则，含糊金额不猜测。
+首次本轮升级只补齐缺失的微信、支付宝、现金、工商银行、农业银行、中国银行、建设银行、储蓄卡，初始余额0。同名账户（包括归档账户）不重复创建，后续不会反复补建；原余额和历史账单保持不变。
 安卓 Whisper 仅增加不含具体金额的中文记账词汇提示，仍强制本地中文推理，不上传、不自动入账。
 词汇提示不是准确率保证；口音、环境噪声和手机性能的改善程度必须通过真机录音评估。
 网页 / PWA 保留浏览器语音方式，不新增后端上传；网页语音本身仍可能依赖浏览器在线服务。
@@ -45,7 +57,19 @@ green numbers are expense. Select a day to filter its editable bill list; select
 to return to the month. Budget warnings always use the actual current month.
 The header search combines keyword, amount, inclusive dates and type. Recent 10 queries
 are stored locally. Statistics includes category ranking and an annual 12-month mode;
-the pie still follows the selected month.
+the pie and income/expense rankings follow the selected month or whole year. Annual
+navigation advances one year; drill-down search preserves that period. Budgets always
+use the actual current month, independent of Home and Statistics filters.
+
+### 双层自动备份
+
+- 每次新页面运行时，在账户初始化和定时计划补记之前生成完整JSON快照，保留最近3份；账单、账户、流水、预算、分类、存钱及计划均包含在内。
+- 安卓默认写入 `getNoBackupFilesDir()/ledger-backups/`，无须存储权限；网页写入独立的 `voice-account-backups` IndexedDB，避免把备份嵌套进备份。
+- 顶部设置进入“备份与恢复”，可立即备份、查看记录、导出或恢复。恢复前先校验选中备份，再备份当前账本；安全备份失败则中止恢复，不覆盖原数据。
+- 安卓点击“授权公共备份目录”，在系统选择器中选择本机内部存储或SD卡的专用文件夹，后续自动复制最近3份。仅接受安卓本地存储提供者，不接受云盘；不申请全盘管理或读写存储权限、不上传数据。
+- 私有备份仍会随卸载、清除应用/网站数据而删除。公共文件能独立保留，但重装后目录授权丢失，需要重新授权；可通过首页“导入 / 恢复”选择公共目录内JSON恢复。
+- 公共目录不可写、授权被撤销、空间不足等情况会提示，私有备份与账本不受影响。轮换仅操作本应用命名的自动备份，不删除目录内其他文件。
+- 同包名、同签名的覆盖安装通常保留数据库和私有备份，不意味着卸载、清除数据或签名不匹配也能保留。升级前仍应导出并核对备份。
 
 Backup controls below Home: Complete Backup exports a versioned JSON containing all
 stores (including budgets/accounts/journal). Import/Restore previews JSON before an
@@ -650,13 +674,13 @@ npx.cmd cap sync android
 源码位于 `android/app/src/main/cpp/third_party/whisper.cpp/`，不进入 Git，脚本可重复准备。
 不依赖构建时 CMake FetchContent 下载，发布 APK 也不携带下载代码。
 
-模型为**多语言 base 的 Q5_1 量化版**，并非中文专用模型，不能替换成 `base.en` 或 faster-whisper
+模型为**多语言 tiny 的 Q5_1 量化版**，并非中文专用模型，不能替换成 `tiny.en` 或 faster-whisper
 使用的 CTranslate2 `model.bin`。内置位置：
 
 ```text
-android/app/src/main/assets/models/ggml-base-q5_1.bin
-59,707,625 字节（约 59.7 MB / 56.9 MiB）
-SHA256: 422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898
+android/app/src/main/assets/models/ggml-tiny-q5_1.bin
+32,152,673 字节（约 32.2 MB / 30.7 MiB）
+SHA256: 818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7
 ```
 
 模型已被 `.gitignore` 排除，克隆仓库后必须重新准备。`-VerifyOnly` 只校验，不联网：
@@ -686,7 +710,9 @@ NDK r28 和链接参数为 16 KiB 内存页提供构建配置，仍需在对应�
 同步成功不等于 C++ 编译成功。准备依赖后，用 Studio 的 **Build > Build Bundle(s) / APK(s) >
 Build APK(s)** 构建 Debug；输出仍为：
 `D:\app开发\android\app\build\outputs\apk\debug\app-debug.apk`。
-模型本身增加约 60MB，最终 APK 还包含两个 ABI 的原生库与网页资源，准确大小以构建产物为准。
+模型本身约32.2MB，比旧base量化模型小约46%；最终APK还包含两个ABI的原生库与网页资源，准确大小以构建产物为准。
+解码采用单个greedy候选、单段输出、固定中文、无上下文及无温度重试；不强行缩短音频上下文或限制文本长度，避免截断金额。
+tiny在口音、噪声或复杂短句上的准确率可能低于base；未做真机速度对比，不承诺固定提速倍数。原有数字容错、分类别名保持不变，并未添加完整繁简转换或猜测金额的纠错。
 运行需要额外模型及推理内存，低内存设备可能加载失败。冷启动、30 秒录音推理耗时及发热因 CPU
 差异很大，本机没有真机基准，不能承诺秒回或与桌面 Python 后端相同的速度。
 
@@ -774,11 +800,12 @@ Whisper 资源复用 `scripts/prepare-android-whisper.ps1`，Ubuntu 运行器使
 
 - 源码来自官方 `ggml-org/whisper.cpp` 的固定提交，由 GitHub codeload 下载。
 - 模型来自项目维护者的 Hugging Face `ggerganov/whisper.cpp` 固定版本，
-  使用 `ggml-base-q5_1.bin`，不使用仅英文的 `base.en`。
+  使用 `ggml-tiny-q5_1.bin`，不使用仅英文的 `tiny.en`。
 - 两者都检查 SHA-256，不匹配即停止。源码、下载缓存和模型继续被 Git 忽略，
   无需把约 60 MB 的模型提交仓库，也无需 API Key 或自备签名证书。
-- 模型保存到 `android/app/src/main/assets/models/ggml-base-q5_1.bin`，
-  与原生插件读取的 `models/ggml-base-q5_1.bin` 一致，随 APK 安装，不在手机首次启动时下载。
+- 模型保存到 `android/app/src/main/assets/models/ggml-tiny-q5_1.bin`，
+  与原生插件读取的 `models/ggml-tiny-q5_1.bin` 一致，随APK安装，不在手机首次启动时下载。
+  准备脚本仅在确认旧base文件哈希后删除被替换的生成资产，Gradle及Actions阻止同时打入旧模型。
 
 Linux 构建使用 `-Dorg.gradle.java.home=$JAVA_HOME` 覆盖本机 Windows JDK 路径，
 不修改已提交的 `android/gradle.properties`，也不修改系统或全局配置。

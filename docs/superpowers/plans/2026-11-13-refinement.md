@@ -74,3 +74,10 @@
 
 - Approved spec is the chat-confirmed design; no additional review pause requested.
 - Plan self-review: tasks 1/3 share startup order (backup before seed); tasks 2/4 share UI files (execute sequentially); task 5 synchronizes all preceding web resources. No schema change or parser edit is required.
+- Task 1 complete: `0016018`; account/plan unit tests 14/14 and focused browser workflows 2/2.
+- Task 2 complete: `73df26c`; calculation tests 7/7 and focused browser workflows 5/5. Historical unknown-category drilldown corrected in `4ecceec`.
+- Task 3 complete: `5cd28d3`; retention/failure tests 2/2 and browser recovery/export tests 2/2. Native API24 storage and local-only SAF hardened in `4ecceec`; Android compile/device validation remains external.
+- Task 4 complete: `f4b743b`; 320px views, 390px/desktop screenshots, reduced motion and calendar color regression verified.
+- Task 5: tiny file downloaded and SHA256 verified; source/model preparation passes; missing/corrupt fixture test passes; workflow lint, cloud hooks and pure-Java tests pass. Full final browser regression and final resource sync recorded in README.
+- Final validation: 120/120 unit, 58/58 browser, 4/4 packaging/cloud, actionlint, two pure-Java suites, model/source VerifyOnly and 37 synchronized hashes pass. Android SDK/NDK compile and device checks not performed; explicitly documented.
+- Execution stayed inline after subagent transport rejected both independent requests before any child edits. No unrelated files were removed.

@@ -38,8 +38,11 @@ android {
 
 tasks.register('verifyWhisperAssets') {
     doLast {
-        def model = file('src/main/assets/models/ggml-base-q5_1.bin')
-        if (!model.exists() || model.length() != 59707625L) {
+        def model = file('src/main/assets/models/ggml-tiny-q5_1.bin')
+        if (file('src/main/assets/models/ggml-base-q5_1.bin').exists()) {
+            throw new GradleException('Obsolete base model still present. Run scripts/prepare-android-whisper.ps1.')
+        }
+        if (!model.exists() || model.length() != 32152673L) {
             throw new GradleException('Bundled Whisper model missing. Run scripts/prepare-android-whisper.ps1.')
         }
         def digest = java.security.MessageDigest.getInstance('SHA-256')
@@ -48,7 +51,7 @@ tasks.register('verifyWhisperAssets') {
             int count
             while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count)
         }
-        if (digest.digest().encodeHex().toString() != '422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898') {
+        if (digest.digest().encodeHex().toString() != '818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7') {
             throw new GradleException('Bundled Whisper model checksum mismatch.')
         }
         def marker = file('src/main/cpp/third_party/whisper.cpp/voice-account-revision.txt')

@@ -50,7 +50,7 @@ Java_com_duancreate_voiceaccount_WhisperNative_load(JNIEnv * env, jclass, jobjec
         whisper_log_set(quiet_log, nullptr);
         auto * assets = AAssetManager_fromJava(env, manager);
         if (!assets) { fail(env, "Asset manager unavailable."); return 0; }
-        AAsset * asset = AAssetManager_open(assets, "models/ggml-base-q5_1.bin", AASSET_MODE_STREAMING);
+        AAsset * asset = AAssetManager_open(assets, "models/ggml-tiny-q5_1.bin", AASSET_MODE_STREAMING);
         if (!asset) { fail(env, "Bundled model missing."); return 0; }
         whisper_model_loader loader{asset, read_asset, asset_eof, close_asset};
         auto parameters = whisper_context_default_params();
@@ -96,6 +96,9 @@ Java_com_duancreate_voiceaccount_WhisperNative_recognize(
         params.language = "zh";
         params.translate = false;
         params.no_context = true;
+        // One greedy candidate and one output segment for short accounting phrases.
+        params.greedy.best_of = 1;
+        params.single_segment = true;
         params.initial_prompt = "这是中文个人记账。餐饮、交通、购物、住宿、娱乐、医疗、教育、工资、奖金、收入、支出、元、角、分。";
         params.no_timestamps = true;
         params.print_realtime = false;

@@ -3,12 +3,12 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $revision = '4979e04f5dcaccb36057e059bbaed8a2f5288315'
 $sourceHash = 'ec8e33f4c838ed459ad0a23da255c0262f150a6f54839a17e504ddf1495305d5'
-$modelHash = '422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898'
+$modelHash = '818710568da3ca15689e31a743197b520007872ff9576237bda97bd1b469c3d7'
 $cache = Join-Path $root '.cache'
 $archive = Join-Path $cache 'whisper-v1.8.2.tar.gz'
 $vendorParent = Join-Path $root 'android/app/src/main/cpp/third_party'
 $vendor = Join-Path $vendorParent 'whisper.cpp'
-$model = Join-Path $root 'android/app/src/main/assets/models/ggml-base-q5_1.bin'
+$model = Join-Path $root 'android/app/src/main/assets/models/ggml-tiny-q5_1.bin'
 
 function Has-Hash($path, $hash) {
     return (Test-Path -LiteralPath $path -PathType Leaf) -and
@@ -35,12 +35,18 @@ if (-not $VerifyOnly) {
         [IO.File]::WriteAllText((Join-Path $vendor 'voice-account-revision.txt'), $revision + "`n")
     }
     if (-not (Has-Hash $model $modelHash)) {
-        Write-Host 'Downloading multilingual base Q5_1 model (59.7 MB; never downloaded by the app)...'
-        Invoke-WebRequest -Uri 'https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base-q5_1.bin' -OutFile $model
+        Write-Host 'Downloading multilingual tiny Q5_1 model (32.2 MB; never downloaded by the app)...'
+        Invoke-WebRequest -Uri 'https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny-q5_1.bin' -OutFile $model
     }
 }
 
 if (-not (Has-Hash $model $modelHash)) { throw 'Model missing or checksum mismatch. Run this script without -VerifyOnly.' }
+$obsolete = Join-Path (Split-Path -Parent $model) 'ggml-base-q5_1.bin'
+if (Test-Path -LiteralPath $obsolete) {
+    if ($VerifyOnly) { throw 'Obsolete base model would also be packaged. Run preparation without -VerifyOnly to remove it.' }
+    if (-not (Has-Hash $obsolete '422f1ae452ade6f30a004d7e5c6a43195e4433bc370bf23fac9cc591f01a8898')) { throw 'Unknown base model file: move it out of assets before building.' }
+    Remove-Item -LiteralPath $obsolete
+}
 $marker = Join-Path $vendor 'voice-account-revision.txt'
 if (-not (Test-Path -LiteralPath $marker) -or (Get-Content -Raw -LiteralPath $marker).Trim() -ne $revision) {
     throw 'Pinned whisper.cpp source missing or revision mismatch.'
@@ -51,4 +57,4 @@ foreach ($file in @('include/whisper.h', 'src/whisper.cpp', 'CMakeLists.txt', 'g
 if (-not $VerifyOnly) {
     Copy-Item -LiteralPath (Join-Path $vendor 'LICENSE') -Destination (Join-Path (Split-Path -Parent $model) 'whisper-cpp-LICENSE.txt')
 }
-Write-Host "Whisper source v1.8.2 and base Q5_1 model verified: $model"
+Write-Host "Whisper source v1.8.2 and tiny Q5_1 model verified: $model"

@@ -12,6 +12,8 @@ const ASSETS = [
   "./js/ledger.js",
   "./js/ledger-api.js",
   "./js/assets-ui.js",
+  "./js/calendar.js",
+  "./js/calendar-ui.js",
   "./js/db.selftest.js",
   "./js/budget-db.js",
   "./js/finance.js",

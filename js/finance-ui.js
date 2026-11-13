@@ -23,6 +23,17 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
   let selected = null;
   let available = false;
   let saving = false;
+  let yearly = false;
+  function selectedStatistics() {
+    const date = selectedMonth ?? new Date();
+    const result = calculateStatistics(records, date);
+    if (!yearly) return result;
+    result.months = Array.from({ length: 12 }, (_, i) => {
+      const data = calculateStatistics(records, new Date(date.getFullYear(), i, 1));
+      return { key: data.key, label: `${i + 1}月`, income: data.income, expense: data.expense };
+    });
+    return result;
+  }
 
   const charts = setupCharts(document.querySelector("#category-chart"), document.querySelector("#trend-chart"), selectCategory);
   setupDisclosure(document.querySelector("#trend-disclosure"), document.querySelector("#trend-panel"));
@@ -87,6 +98,11 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     document.querySelector("#chart-empty").hidden = statistics.expense > 0;
     document.querySelector("#detail-empty").textContent = "该月该分类暂无支出";
     document.querySelector("#category-total").textContent = `¥${money.format(statistics.expense)}`;
+    document.querySelector('#trend-title').textContent = yearly ? `${date.getFullYear()}年收支趋势` : '近6个月收支';
+    document.querySelector('#category-ranking').replaceChildren(...statistics.categories.filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount).map((c, i) => {
+      const row = document.createElement('li'); const label = document.createElement('span'); label.textContent = `${i + 1}. ${c.icon} ${c.label || c.name}`;
+      const value = document.createElement('strong'); value.textContent = `¥${money.format(c.amount)}`; row.append(label, value); return row;
+    }));
     legend.replaceChildren(...statistics.categories.map((category) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -256,11 +272,12 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     const next = new Date(date.getFullYear(), date.getMonth() + offset, 1);
     if (monthKey(next) > monthKey(new Date())) return;
     selectedMonth = monthKey(next) === monthKey(new Date()) ? null : next;
-    statistics = calculateStatistics(records, selectedMonth ?? new Date());
+    statistics = selectedStatistics();
     renderStatistics();
   }
   previousMonth.addEventListener("click", () => changeMonth(-1));
   nextMonth.addEventListener("click", () => changeMonth(1));
+  document.querySelector('#statistics-mode').onchange = event => { yearly = event.target.value === 'year'; statistics = selectedStatistics(); renderStatistics(); };
 
   return {
     setAvailable(value) {
@@ -274,7 +291,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
       if (!budgetDialog.open) buildBudgetFields();
       records = bills;
       currentStatistics = calculateStatistics(bills);
-      statistics = selectedMonth ? calculateStatistics(bills, selectedMonth) : currentStatistics;
+      statistics = selectedStatistics();
       renderStatistics();
       try { settings = await getBudget(); }
       catch (error) { settings = null; }

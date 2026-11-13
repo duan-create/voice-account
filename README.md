@@ -11,6 +11,13 @@ archived rather than erased; renaming a category preserves its original historic
 The v3 upgrade adds stores without rewriting existing bills or budgets. Asset totals
 include archived balances. The chart and journal show posted asset changes.
 
+Calendar: Home month arrows select historical months. Red daily numbers are income;
+green numbers are expense. Select a day to filter its editable bill list; select it again
+to return to the month. Budget warnings always use the actual current month.
+The header search combines keyword, amount, inclusive dates and type. Recent 10 queries
+are stored locally. Statistics includes category ranking and an annual 12-month mode;
+the pie still follows the selected month.
+
 Android now has a custom offline Whisper plugin. See **Android 端侧离线 Whisper** below:
 building this version additionally requires the prepared model/source, NDK and CMake.
 The older web-only ZIP and Web Speech API notes do not describe the new Android voice path.

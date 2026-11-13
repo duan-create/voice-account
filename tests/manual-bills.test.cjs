@@ -95,6 +95,28 @@ test('assets form links a bill to an account and edit/delete restore its balance
   assert.equal(await page.locator('#total-assets').textContent(), '1,000.00');
 });
 
+test('calendar selects a day, search returns editable rows and annual chart fits twelve months', async () => {
+  await openForm({ remark: '日历午餐', amount: '18' }); await save();
+  const today = await page.locator('#bill-date').inputValue();
+  await page.locator(`.calendar-day[data-date="${today}"]`).click();
+  assert.match(await page.locator('#bills-title').textContent(), /明细/);
+  assert.equal(await page.locator('.bill-item').count(), 1);
+  await page.locator('#open-search').click();
+  await page.locator('#search-keyword').fill('日历午餐');
+  await page.locator('#search-form [type=submit]').click();
+  assert.match(await page.locator('#bills-title').textContent(), /搜索结果/);
+  await page.locator('.bill-action[data-action=edit]').click();
+  assert.equal(await page.locator('#bill-amount').inputValue(), '18');
+  await page.locator('#cancel-bill').click();
+  await page.locator('#statistics-tab').click();
+  await page.locator('#statistics-mode').selectOption('year');
+  assert.equal(await page.locator('#trend-data tr').count(), 12);
+  for (const width of [320, 375, 1024]) {
+    await page.setViewportSize({ width, height: 812 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  }
+});
+
 async function save() {
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await page.locator("#bill-dialog").waitFor({ state: "hidden" });

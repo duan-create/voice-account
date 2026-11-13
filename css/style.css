@@ -676,6 +676,21 @@ progress::-moz-progress-bar { background: linear-gradient(90deg, #83b2f3, #4778c
 .module-heading { margin-top: 1.75rem; font-size: 1rem; }
 #asset-form fieldset { border: 0; min-width: 0; }
 #asset-trend { display: block; width: 100%; height: 160px; }
+.weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.weekdays { text-align: center; padding: 1rem 0 0.5rem; color: var(--color-muted); font-size: 0.75rem; }
+.calendar-grid { gap: 2px; }
+.calendar-day { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; height: 76px; min-width: 0; padding: 5px 0; border: 1px solid transparent; border-radius: 6px; background: rgb(255 255 255 / 65%); }
+.calendar-day b { font-size: 0.8125rem; font-weight: 500; }
+.calendar-day span { display: block; width: 100%; font-size: 0.5625rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.calendar-income { color: #bf4e60; }.calendar-expense { color: #20876d; }
+.calendar-day.today b { color: var(--color-primary); font-weight: 800; }
+.calendar-day[aria-pressed=true] { border-color: var(--color-primary); background: #e8f0ff; }
+.month-balance { display: flex; justify-content: space-between; font-size: 0.8125rem; color: var(--color-muted); padding-top: 0.75rem; }
+.month-balance strong { font-size: 1.125rem; color: var(--color-primary); }
+.form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.stats-mode { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; padding-bottom: 1rem; }
+.stats-mode select { padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; background: white; }
+#category-ranking li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.625rem 0; border-bottom: 1px solid var(--color-border); font-size: 0.8125rem; }
 
 @media (min-width: 36rem) {
   .bill-item {

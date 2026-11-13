@@ -45,7 +45,9 @@ export function setupCharts(pie, trend, onSelect) {
         if (category.amount !== statistics.expense) ctx.moveTo(cx, cy);
         ctx.arc(cx, cy, radius, start, end);
         ctx.closePath();
-        ctx.fillStyle = category.color;
+        const fill = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
+        fill.addColorStop(0, category.color); fill.addColorStop(1, `${category.color}b5`);
+        ctx.fillStyle = fill;
         ctx.fill();
         ctx.shadowColor = "transparent";
         ctx.strokeStyle = "#f8fafc";
@@ -76,9 +78,9 @@ export function setupCharts(pie, trend, onSelect) {
       ctx.fillStyle = "#657184";
       ctx.fillText(value >= 10000 ? `${(value / 10000).toFixed(1)}万` : value >= 1000 ? `${(value / 1000).toFixed(1)}千` : value >= 10 ? String(Math.round(value)) : value.toFixed(1), left - 6, y + 4);
     }
-    const x = (index) => left + (right - left) * index / 5;
+    const x = (index) => left + (right - left) * index / Math.max(1, statistics.months.length - 1);
     ctx.textAlign = "center";
-    statistics.months.forEach((month, index) => ctx.fillText(month.label, x(index), height - 10));
+    statistics.months.forEach((month, index) => { if (statistics.months.length <= 6 || index % 2 === 0 || index === 11) ctx.fillText(month.label, x(index), height - 10); });
     for (const [type, color] of [["income", "#238779"], ["expense", "#527dc9"]]) {
       const points = statistics.months.map((month, index) => [x(index), bottom - month[type] / max * (bottom - top)]);
       const fill = ctx.createLinearGradient(0, top, 0, bottom);

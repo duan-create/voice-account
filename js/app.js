@@ -6,7 +6,9 @@ import { setupFinanceUI } from "./finance-ui.js";
 import { animateAmount, stopAmountAnimation, requestDelete, fitAmount } from "./ui.js";
 import { ledger } from './ledger-api.js';
 import { setupAssets } from './assets-ui.js';
+import { setupCalendar } from './calendar-ui.js';
 const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
+const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage });
 
 const manualButton = document.querySelector(".manual-button");
 const voiceButton = document.querySelector(".voice-button");
@@ -145,6 +147,8 @@ async function refreshBills() {
     listState.textContent = records.length ? "" : "暂无账单";
     listState.hidden = records.length > 0;
     document.querySelector("#empty-bills").hidden = records.length > 0;
+    stopAmountAnimation(incomeAmount); stopAmountAnimation(expenseAmount);
+    calendar.update(records);
     ready = true;
     await finance.update(records);
   } catch (error) {

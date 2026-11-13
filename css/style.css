@@ -688,12 +688,14 @@ progress::-moz-progress-bar { background: linear-gradient(90deg, #83b2f3, #4778c
 .weekdays, .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .weekdays { text-align: center; padding: 1rem 0 0.5rem; color: var(--color-muted); font-size: 0.75rem; }
 .calendar-grid { gap: 2px; }
-.calendar-day { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; height: 76px; min-width: 0; padding: 5px 0; border: 1px solid transparent; border-radius: 6px; background: rgb(255 255 255 / 65%); }
+.calendar-day { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; height: 76px; min-width: 0; padding: 5px 0; border: 1px solid transparent; border-radius: 6px; background: #f1f3f5; }
+.calendar-day[data-balance="income"] { background: #fcebef; }
+.calendar-day[data-balance="expense"] { background: #dcf5ed; }
 .calendar-day b { font-size: 0.8125rem; font-weight: 500; }
 .calendar-day span { display: block; width: 100%; font-size: 0.5625rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .calendar-income { color: #bf4e60; }.calendar-expense { color: #20876d; }
 .calendar-day.today b { color: var(--color-primary); font-weight: 800; }
-.calendar-day[aria-pressed=true] { border-color: var(--color-primary); background: #e8f0ff; }
+.calendar-day[aria-pressed=true] { border-color: var(--color-primary); }
 .month-balance { display: flex; justify-content: space-between; font-size: 0.8125rem; color: var(--color-muted); padding-top: 0.75rem; }
 .month-balance strong { font-size: 1.125rem; color: var(--color-primary); }
 .form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }

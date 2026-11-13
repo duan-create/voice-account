@@ -119,6 +119,39 @@ test('calendar selects a day, search returns editable rows and annual chart fits
   }
 });
 
+test('calendar day backgrounds follow net income and expense and retain their color when selected', async () => {
+  await waitForReady();
+  const dates = await page.evaluate(async () => {
+    const { ledger } = await import('./js/ledger-api.js');
+    const now = new Date(), dates = [];
+    for (let day = 1; day <= 5; day++) {
+      const date = new Date(now.getFullYear(), now.getMonth(), day);
+      dates.push(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
+      const amounts = [[20, 5], [5, 20], [10, 10], [0, 0], [0.3, 0.1 + 0.2]][day - 1];
+      for (const [index, amount] of amounts.entries()) if (amount) await ledger.saveBill(null, { type: index ? '支出' : '收入', amount: Math.round(amount * 100) / 100, category: '其他', remark: '日期配色验证', date: date.getTime() });
+    }
+    return dates;
+  });
+  await page.reload(); await waitForReady();
+  const day = index => page.locator(`.calendar-day[data-date="${dates[index]}"]`);
+  const background = index => day(index).evaluate(element => getComputedStyle(element).backgroundColor);
+  const red = await background(0), green = await background(1), neutral = await background(2);
+  const channels = color => color.match(/[\d.]+/g).map(Number);
+  assert.ok(channels(red)[0] > channels(red)[1] && channels(red)[0] > channels(red)[2], 'net income needs a red-tinted background');
+  assert.ok(channels(green)[1] > channels(green)[0] && channels(green)[1] > channels(green)[2], 'net expense needs a green-tinted background');
+  assert.equal(neutral, await background(3));
+  assert.equal(neutral, await background(4), 'equal fractional amounts must remain neutral');
+  await day(0).click();
+  assert.equal(await day(0).getAttribute('aria-pressed'), 'true');
+  assert.equal(await background(0), red);
+  assert.equal(await page.locator('.bill-item').count(), 2);
+  for (const width of [320, 375, 1024]) {
+    await page.setViewportSize({ width, height: 812 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({ path: join(root, `.cache/calendar-colors-${width}.png`), fullPage: true });
+  }
+});
+
 test('complete backup and CSV/Excel exports work offline and CSV import previews before writing', async () => {
   await openForm({ remark: '导出,"备注"', amount: '12.50' }); await save();
   for (const extension of ['json', 'csv', 'xlsx']) {

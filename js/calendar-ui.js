@@ -24,6 +24,8 @@ export function setupCalendar({ render, viewport, showMessage, onDisplay }) {
     for (let i = 0; i < data.offset; i++) { const blank = document.createElement('span'); blank.setAttribute('aria-hidden', 'true'); grid.append(blank); }
     for (const day of data.days) {
       const button = document.createElement('button'); button.type = 'button'; button.className = 'calendar-day'; button.dataset.date = day.date;
+      const balance = Math.round(day.income * 100) - Math.round(day.expense * 100);
+      button.dataset.balance = balance > 0 ? 'income' : balance < 0 ? 'expense' : 'neutral';
       button.classList.toggle('today', day.date === dateKey()); button.setAttribute('aria-pressed', String(day.date === selected));
       button.setAttribute('aria-label', `${day.date} 收入 ${money.format(day.income)} 支出 ${money.format(day.expense)}`);
       const number = document.createElement('b'); number.textContent = day.day; button.append(number);

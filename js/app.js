@@ -7,8 +7,10 @@ import { animateAmount, stopAmountAnimation, requestDelete, fitAmount } from "./
 import { ledger } from './ledger-api.js';
 import { setupAssets } from './assets-ui.js';
 import { setupCalendar } from './calendar-ui.js';
+import { setupBackup, saveFile } from './backup-ui.js';
 const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
 const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage });
+setupBackup({ refresh: refreshBills, showMessage, viewport: updateDialogViewport });
 
 const manualButton = document.querySelector(".manual-button");
 const voiceButton = document.querySelector(".voice-button");
@@ -265,15 +267,7 @@ exportButton.addEventListener("click", async () => {
   setBusy(true);
   try {
     const records = await getBills();
-    const url = URL.createObjectURL(new Blob([JSON.stringify(records, null, 2)], { type: "application/json" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `voice-account-bills-${localDate()}.json`;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    // Leave time for the browser to begin reading the download before releasing its URL.
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    await saveFile(`voice-account-bills-${localDate()}.json`, 'application/json', new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' }));
     showMessage("备份文件已生成，请妥善保存下载的 JSON 文件。");
   } catch (error) {
     console.error("[Bills] Export failed:", error);

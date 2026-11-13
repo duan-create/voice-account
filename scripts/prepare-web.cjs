@@ -5,6 +5,13 @@ const root = resolve(__dirname, "..");
 const webDir = join(root, "www");
 
 async function prepareWeb() {
+  await mkdir(join(root, 'js/vendor'), { recursive: true });
+  for (const [source, destination] of [
+    ['papaparse/papaparse.min.js', 'papaparse.min.js'],
+    ['papaparse/LICENSE', 'papaparse-LICENSE.txt'],
+    ['exceljs/dist/exceljs.min.js', 'exceljs.min.js'],
+    ['exceljs/LICENSE', 'exceljs-LICENSE.txt']
+  ]) await copyFile(join(root, 'node_modules', source), join(root, 'js/vendor', destination));
   // Keep the allowlist explicit: never copy .git, node_modules or android into the app.
   await rm(webDir, { recursive: true, force: true });
   await mkdir(webDir, { recursive: true });

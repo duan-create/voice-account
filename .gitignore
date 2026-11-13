@@ -8,6 +8,10 @@ node_modules/
 /www/
 /capacitor.js
 /capacitor.js.map
+/js/vendor/papaparse.min.js
+/js/vendor/papaparse-LICENSE.txt
+/js/vendor/exceljs.min.js
+/js/vendor/exceljs-LICENSE.txt
 /voice-account-build.zip
 
 # Android local state, generated assets and build artifacts

@@ -19,7 +19,7 @@ before(async () => {
   const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json" };
   server = createServer(async (request, response) => {
     const path = new URL(request.url, "http://localhost").pathname.slice(1) || "index.html";
-    if (!files.has(path) && !/^js\/[a-z][a-z-]*\.js$/.test(path)) {
+    if (!files.has(path) && !/^js\/[a-z][a-z-]*\.js$/.test(path) && !/^js\/vendor\/(?:papaparse|exceljs)\.min\.js$/.test(path)) {
       response.writeHead(404).end();
       return;
     }
@@ -115,6 +115,24 @@ test('calendar selects a day, search returns editable rows and annual chart fits
     await page.setViewportSize({ width, height: 812 });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   }
+});
+
+test('complete backup and CSV/Excel exports work offline and CSV import previews before writing', async () => {
+  await openForm({ remark: '导出,"备注"', amount: '12.50' }); await save();
+  for (const extension of ['json', 'csv', 'xlsx']) {
+    const download = page.waitForEvent('download');
+    await page.locator(`[data-export="${extension}"]`).click();
+    const file = await download; assert.ok(file.suggestedFilename().endsWith(`.${extension}`));
+    if (extension === 'json') { const data = JSON.parse(await readFile(await file.path(), 'utf8')); assert.equal(data.format, 'voice-account'); assert.equal(data.stores.bills.length, 1); }
+    if (extension === 'xlsx') { const bytes = await readFile(await file.path()); assert.equal(bytes.toString('ascii', 0, 2), 'PK'); }
+  }
+  await page.locator('#import-file').setInputFiles({ name: 'bills.csv', mimeType: 'text/csv', buffer: Buffer.from('日期,类型,金额,分类,备注,账户\n2026-11-13,支出,5,交通,导入地铁,未指定账户') });
+  await page.locator('#import-dialog[open]').waitFor();
+  assert.match(await page.locator('#import-preview').textContent(), /通过/);
+  assert.equal((await readBills()).length, 1);
+  await page.locator('#confirm-import').click();
+  await page.locator('#import-dialog').waitFor({ state: 'hidden' });
+  assert.equal((await readBills()).length, 2);
 });
 
 async function save() {

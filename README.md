@@ -18,6 +18,18 @@ The header search combines keyword, amount, inclusive dates and type. Recent 10 
 are stored locally. Statistics includes category ranking and an annual 12-month mode;
 the pie still follows the selected month.
 
+Backup controls below Home: Complete Backup exports a versioned JSON containing all
+stores (including budgets/accounts/journal). Import/Restore previews JSON before an
+explicit replacement transaction; export the current complete backup first. Legacy
+bills-only JSON is supported but contains no accounts or budgets. CSV/Excel export all
+bills with date/type/amount/category/note/account. CSV imports require those six Chinese
+headers, exact existing category/account names, a YYYY-MM-DD date and positive two-decimal
+amounts. Invalid rows block the entire import; create missing accounts/categories first.
+CSV import appends and never deduplicates identical legitimate bills automatically.
+Libraries are bundled locally by npm prepare, including licenses; there is no CDN.
+Android opens the system Save As document picker; cancelled/failed saves report errors.
+Native document-provider compatibility still requires a device test.
+
 Android now has a custom offline Whisper plugin. See **Android 端侧离线 Whisper** below:
 building this version additionally requires the prepared model/source, NDK and CMake.
 The older web-only ZIP and Web Speech API notes do not describe the new Android voice path.

@@ -701,6 +701,19 @@ progress::-moz-progress-bar { background: linear-gradient(90deg, #83b2f3, #4778c
 .form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .stats-mode { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; padding-bottom: 1rem; }
 .stats-mode select { padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; background: white; }
+.full-screen-view { position: fixed; inset: 0; z-index: 6; background: #f5f7fb; overflow-y: auto; overscroll-behavior: contain; padding: calc(1rem + env(safe-area-inset-top, 0px)) 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px)); }
+.screen-content { width: 100%; max-width: 40rem; margin: auto; }
+body:has(.full-screen-view:not([hidden])) { overflow: hidden; }
+.search-result, .ranking-button { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; min-height: 52px; padding: 0.875rem 0; border: 0; border-bottom: 1px solid var(--color-border); background: transparent; text-align: left; font-size: 0.875rem; }
+.search-result > span { display: grid; gap: 0.25rem; min-width: 0; overflow-wrap: anywhere; }
+.search-result small { color: var(--color-muted); font-size: 0.75rem; }
+.search-result b { text-align: right; overflow-wrap: anywhere; min-width: 0; font-variant-numeric: tabular-nums; }
+.amount-income { color: #a56070; }.amount-expense { color: #427f71; }
+.search-submit { width: 100%; min-height: 44px; border: 0; border-radius: 6px; color: white; background: var(--color-primary); }
+#search-history { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.history-chip { min-height: 44px; max-width: 100%; overflow-wrap: anywhere; padding: 0.5rem 0.75rem; border: 1px solid var(--color-border); border-radius: 6px; background: white; font-size: 0.8125rem; }
+#bill-detail-content { white-space: pre-wrap; overflow-wrap: anywhere; padding: 1rem 0; }
+#ranking-type { min-height: 44px; border: 1px solid var(--color-border); border-radius: 6px; background: white; padding: 0.5rem; }
 #category-ranking li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.625rem 0; border-bottom: 1px solid var(--color-border); font-size: 0.8125rem; }
 
 @media (min-width: 36rem) {

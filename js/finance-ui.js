@@ -3,7 +3,7 @@ import { CATEGORIES, calculateStatistics, calculateBudgetUsage, categoryFor, mon
 import { setupCharts } from "./charts.js";
 import { setupDisclosure } from "./ui.js";
 
-export function setupFinanceUI({ showMessage, updateDialogViewport }) {
+export function setupFinanceUI({ showMessage, updateDialogViewport, openSearch }) {
   const budgetDialog = document.querySelector("#budget-dialog");
   const budgetForm = document.querySelector("#budget-form");
   const budgetMessage = document.querySelector("#budget-message");
@@ -24,15 +24,15 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
   let available = false;
   let saving = false;
   let yearly = false;
+  let rankingType = '支出';
   function selectedStatistics() {
     const date = selectedMonth ?? new Date();
-    const result = calculateStatistics(records, date);
-    if (!yearly) return result;
-    result.months = Array.from({ length: 12 }, (_, i) => {
-      const data = calculateStatistics(records, new Date(date.getFullYear(), i, 1));
-      return { key: data.key, label: `${i + 1}月`, income: data.income, expense: data.expense };
-    });
-    return result;
+    return calculateStatistics(records, date, yearly);
+  }
+  function drilldown(category, type = '支出') {
+    const date = selectedMonth ?? new Date(), year = date.getFullYear(), month = date.getMonth();
+    const format = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    openSearch({ category, type, start: format(new Date(year, yearly ? 0 : month, 1)), end: format(new Date(year, yearly ? 12 : month + 1, 0)) });
   }
 
   const charts = setupCharts(document.querySelector("#category-chart"), document.querySelector("#trend-chart"), selectCategory);
@@ -66,6 +66,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     selection.hidden = !selected;
     if (!selected) return;
     const category = statistics.categories.find((item) => item.name === selected);
+    if (!category) { selected = null; details.hidden = true; selection.hidden = true; return; }
     const share = statistics.expense ? Math.round(category.amount / statistics.expense * 100) : 0;
     selection.style.setProperty("--category-color", category.color);
     document.querySelector("#selection-name").textContent = `${category.icon} ${category.label}`;
@@ -73,7 +74,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     document.querySelector("#selection-percent").textContent = `${share}%`;
     document.querySelector("#details-title").textContent = `${category.label} · ${statistics.key} 支出`;
     const list = document.querySelector("#detail-list");
-    const rows = records.filter((bill) => bill.type === "支出" && monthKey(new Date(bill.date)) === statistics.key && categoryFor(bill.category).name === selected);
+    const rows = records.filter((bill) => bill.type === "支出" && (yearly ? String(new Date(bill.date).getFullYear()) === statistics.key : monthKey(new Date(bill.date)) === statistics.key) && categoryFor(bill.category).name === selected);
     list.replaceChildren(...rows.map((bill) => {
       const row = document.createElement("li");
       const description = document.createElement("div");
@@ -92,16 +93,19 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
 
   function renderStatistics() {
     const date = selectedMonth ?? new Date();
-    document.querySelector("#statistics-month").textContent = `${date.getFullYear()}年${date.getMonth() + 1}月`;
-    document.querySelector("#category-chart-title").textContent = statistics.key === monthKey(new Date()) ? "本月分类支出" : "分类支出";
-    nextMonth.disabled = !available || statistics.key >= monthKey(new Date());
+    document.querySelector("#statistics-month").textContent = yearly ? `${date.getFullYear()}年` : `${date.getFullYear()}年${date.getMonth() + 1}月`;
+    document.querySelector("#category-chart-title").textContent = yearly ? '全年分类支出' : statistics.key === monthKey(new Date()) ? "本月分类支出" : "分类支出";
+    nextMonth.disabled = !available || (yearly ? date.getFullYear() >= new Date().getFullYear() : statistics.key >= monthKey(new Date()));
+    previousMonth.setAttribute('aria-label', yearly ? '上一年' : '上个月'); nextMonth.setAttribute('aria-label', yearly ? '下一年' : '下个月');
     document.querySelector("#chart-empty").hidden = statistics.expense > 0;
     document.querySelector("#detail-empty").textContent = "该月该分类暂无支出";
     document.querySelector("#category-total").textContent = `¥${money.format(statistics.expense)}`;
     document.querySelector('#trend-title').textContent = yearly ? `${date.getFullYear()}年收支趋势` : '近6个月收支';
-    document.querySelector('#category-ranking').replaceChildren(...statistics.categories.filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount).map((c, i) => {
-      const row = document.createElement('li'); const label = document.createElement('span'); label.textContent = `${i + 1}. ${c.icon} ${c.label || c.name}`;
-      const value = document.createElement('strong'); value.textContent = `¥${money.format(c.amount)}`; row.append(label, value); return row;
+    const ranked = rankingType === '收入' ? statistics.incomeCategories : statistics.categories;
+    document.querySelector('#category-ranking').replaceChildren(...ranked.filter(c => c.amount > 0).sort((a, b) => b.amount - a.amount).map((c, i) => {
+      const row = document.createElement('li'), button = document.createElement('button'); button.type = 'button'; button.className = 'ranking-button';
+      const label = document.createElement('span'); label.textContent = `${i + 1}. ${c.label || c.name}`;
+      const value = document.createElement('strong'); value.textContent = `¥${money.format(c.amount)}`; button.append(label, value); button.onclick = () => drilldown(c.name, rankingType); row.append(button); return row;
     }));
     legend.replaceChildren(...statistics.categories.filter(category => category.amount > 0).map((category) => {
       const button = document.createElement("button");
@@ -269,7 +273,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
   function changeMonth(offset) {
     if (!available) return;
     const date = selectedMonth ?? new Date();
-    const next = new Date(date.getFullYear(), date.getMonth() + offset, 1);
+    const next = new Date(date.getFullYear() + (yearly ? offset : 0), date.getMonth() + (yearly ? 0 : offset), 1);
     if (monthKey(next) > monthKey(new Date())) return;
     selectedMonth = monthKey(next) === monthKey(new Date()) ? null : next;
     statistics = selectedStatistics();
@@ -278,6 +282,8 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
   previousMonth.addEventListener("click", () => changeMonth(-1));
   nextMonth.addEventListener("click", () => changeMonth(1));
   document.querySelector('#statistics-mode').onchange = event => { yearly = event.target.value === 'year'; statistics = selectedStatistics(); renderStatistics(); };
+  document.querySelector('#ranking-type').onchange = event => { rankingType = event.target.value; renderStatistics(); };
+  document.querySelector('#search-category-details').onclick = () => { if (selected) drilldown(selected); };
 
   return {
     decorate: renderBudgets,
@@ -286,7 +292,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
       budgetButton.disabled = !value;
       tabs.forEach((tab) => { tab.disabled = !value; });
       previousMonth.disabled = !value;
-      nextMonth.disabled = !value || statistics.key >= monthKey(new Date());
+      nextMonth.disabled = !value || (yearly ? (selectedMonth ?? new Date()).getFullYear() >= new Date().getFullYear() : statistics.key >= monthKey(new Date()));
     },
     async update(bills) {
       if (!budgetDialog.open) buildBudgetFields();

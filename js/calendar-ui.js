@@ -1,11 +1,9 @@
-import { calendarMonth, dateKey, searchBills } from './calendar.js';
-import { money, categoryFor } from './finance.js';
-import { ledger } from './ledger-api.js';
+import { calendarMonth, dateKey } from './calendar.js';
+import { money } from './finance.js';
 import { animateAmount, fitAmount, stopAmountAnimation } from './ui.js';
 
 export function setupCalendar({ render, viewport, showMessage, onDisplay }) {
-  let records = [], month = null, selected = null, search = null, lastSummary = '';
-  const form = document.querySelector('#search-form'), dialog = document.querySelector('#search-dialog');
+  let records = [], month = null, selected = null, lastSummary = '';
   function display() {
     const shown = month ?? new Date();
     const data = calendarMonth(records, shown);
@@ -32,37 +30,17 @@ export function setupCalendar({ render, viewport, showMessage, onDisplay }) {
       for (const [kind, value] of [['income', day.income], ['expense', day.expense]]) {
         const amount = document.createElement('span'); amount.className = `calendar-${kind}`; amount.textContent = value ? `${kind === 'income' ? '+' : '-'}${money.format(value)}` : ''; amount.title = amount.textContent; button.append(amount);
       }
-      button.onclick = () => { search = null; selected = selected === day.date ? null : day.date; display(); };
+      button.onclick = () => { selected = selected === day.date ? null : day.date; display(); };
       grid.append(button);
     }
-    const query = search;
-    const filtered = query ? searchBills(records.map(b => ({ ...b, categoryLabel: categoryFor(b.category).label })), query) : records.filter(b => selected ? dateKey(b.date) === selected : dateKey(b.date).slice(0, 7) === dateKey(shown).slice(0, 7));
+    const filtered = records.filter(b => selected ? dateKey(b.date) === selected : dateKey(b.date).slice(0, 7) === dateKey(shown).slice(0, 7));
     render(filtered);
-    document.querySelector('#bills-title').textContent = query ? `搜索结果 · ${filtered.length}笔` : selected ? `${selected} 明细` : '本月账单';
+    document.querySelector('#bills-title').textContent = selected ? `${selected} 明细` : '本月账单';
     document.querySelector('#list-state').hidden = filtered.length > 0;
     document.querySelector('#list-state').textContent = filtered.length ? '' : '暂无符合条件的账单';
     document.querySelector('#empty-bills').hidden = filtered.length > 0;
     onDisplay?.();
   }
-  for (const [id, offset] of [['home-previous', -1], ['home-next', 1]]) document.querySelector(`#${id}`).onclick = () => { const shown = month ?? new Date(); const next = new Date(shown.getFullYear(), shown.getMonth() + offset, 1); month = dateKey(next).slice(0, 7) === dateKey().slice(0, 7) ? null : next; selected = null; search = null; display(); };
-  document.querySelector('#open-search').onclick = async () => {
-    const saved = (await ledger.all('settings')).find(s => s.id === 'searches')?.queries ?? [];
-    document.querySelector('#search-history').replaceChildren(...saved.map(query => {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'text-button'; b.textContent = query.keyword || `${query.start || '不限'} 至 ${query.end || '不限'} ${query.type || ''}`;
-      b.onclick = () => { for (const [key, value] of Object.entries(query)) form.elements.namedItem(key).value = value; }; return b;
-    }));
-    dialog.showModal(); viewport();
-  };
-  document.querySelector('#cancel-search').onclick = () => { dialog.close(); display(); };
-  form.onsubmit = async event => {
-    event.preventDefault();
-    const query = Object.fromEntries(new FormData(form));
-    if ((query.start && query.end && query.start > query.end) || (query.min && query.max && Number(query.min) > Number(query.max))) return showMessage('筛选范围的起点不能大于终点。', true);
-    search = query;
-    display();
-    const previous = (await ledger.all('settings')).find(s => s.id === 'searches')?.queries ?? [];
-    await ledger.put('settings', { id: 'searches', queries: [query, ...previous.filter(q => JSON.stringify(q) !== JSON.stringify(query))].slice(0, 10) });
-    dialog.close(); document.querySelector('#home-tab').click();
-  };
+  for (const [id, offset] of [['home-previous', -1], ['home-next', 1]]) document.querySelector(`#${id}`).onclick = () => { const shown = month ?? new Date(); const next = new Date(shown.getFullYear(), shown.getMonth() + offset, 1); month = dateKey(next).slice(0, 7) === dateKey().slice(0, 7) ? null : next; selected = null; display(); };
   return { update(bills) { records = bills; display(); } };
 }

@@ -49,3 +49,17 @@ test("empty statistics and unset budgets have no warnings; reaching a limit is n
   const full = calculateStatistics([bill("支出", 0.3, "餐饮", "2026-02-01T00:00:00")], new Date("2026-02-01T00:00:00"));
   assert.deepEqual(calculateBudgetUsage({ total: 0.3, categories: {} }, full).total, { limit: 0.3, spent: 0.3, remaining: 0, percent: 100, exceeded: false });
 });
+test('year statistics aggregate both category rankings and twelve months in cents', async () => {
+  const { calculateStatistics } = await load();
+  const data = calculateStatistics([
+    bill('支出', 0.1, '餐饮', '2026-01-01'), bill('支出', 0.2, '餐饮', '2026-12-31'),
+    bill('收入', 50, '工资', '2026-03-01'), bill('收入', 100, '奖金', '2026-11-01'),
+    bill('支出', 999, '餐饮', '2025-12-31')
+  ], new Date(2026, 5, 1), true);
+  assert.equal(data.key, '2026');
+  assert.equal(data.expense, 0.3); assert.equal(data.income, 150);
+  assert.equal(data.categories.find(c => c.name === '餐饮').amount, 0.3);
+  assert.equal(data.incomeCategories.find(c => c.name === '奖金').amount, 100);
+  assert.equal(data.months.length, 12);
+  assert.equal(data.months[11].expense, 0.2);
+});

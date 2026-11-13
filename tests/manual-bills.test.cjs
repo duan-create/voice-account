@@ -104,12 +104,13 @@ test('calendar selects a day, search returns editable rows and annual chart fits
   await page.locator('#open-search').click();
   await page.locator('#search-keyword').fill('日历午餐');
   await page.locator('#search-form [type=submit]').click();
-  assert.match(await page.locator('#bills-title').textContent(), /搜索结果/);
-  await page.locator('.bill-action[data-action=edit]').click();
+  assert.match(await page.locator('#search-count').textContent(), /搜索结果 · 1笔/);
+  await page.locator('.search-result').click();
+  await page.locator('#edit-search-bill').click();
   assert.equal(await page.locator('#bill-amount').inputValue(), '18');
   await page.locator('#bill-amount').fill('19'); await save();
-  assert.match(await page.locator('#bills-title').textContent(), /搜索结果/);
-  assert.match(await page.locator('.bill-list').textContent(), /19\.00/);
+  assert.match(await page.locator('#search-results').textContent(), /19\.00/);
+  await page.locator('#cancel-search').click();
   await page.locator('#statistics-tab').click();
   await page.locator('#statistics-mode').selectOption('year');
   assert.equal(await page.locator('#trend-data tr').count(), 12);
@@ -150,6 +151,26 @@ test('calendar day backgrounds follow net income and expense and retain their co
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: join(root, `.cache/calendar-colors-${width}.png`), fullPage: true });
   }
+});
+
+test('search defaults to this month, persists ten histories and ranking opens exact annual details', async () => {
+  await waitForReady();
+  await page.evaluate(async () => {
+    const { ledger } = await import('./js/ledger-api.js'); const year = new Date().getFullYear();
+    for (const [month, type, category, amount] of [[0, '支出', '餐饮', 12], [9, '支出', '餐饮', 18], [0, '收入', '工资', 100]]) await ledger.saveBill(null, { type, category, amount, remark: '年度验证', date: new Date(year, month, 2).getTime() });
+  });
+  await page.reload(); await waitForReady(); await page.locator('#open-search').click();
+  await page.locator('#search-view').waitFor({ state: 'visible' });
+  assert.match(await page.locator('#search-start').inputValue(), /-01$/);
+  for (let i = 0; i < 11; i++) { await page.locator('#search-keyword').fill(`查询${i}`); await page.locator('#search-form [type=submit]').click(); await page.waitForFunction(n => document.querySelector('#search-history').firstElementChild?.textContent === `查询${n}`, i); }
+  assert.equal(await page.locator('.history-chip').count(), 10);
+  await page.locator('#clear-search-history').click(); await page.waitForFunction(() => !document.querySelector('#search-history').children.length);
+  await page.locator('#cancel-search').click(); await page.locator('#statistics-tab').click(); await page.locator('#statistics-mode').selectOption('year');
+  assert.equal(await page.locator('#category-total').textContent(), '¥30.00');
+  await page.locator('.ranking-button').first().click();
+  await page.locator('#search-view').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('.search-result').count(), 2);
+  assert.match(await page.locator('#search-category-filter').textContent(), /餐饮/);
 });
 
 test('complete backup and CSV/Excel exports work offline and CSV import previews before writing', async () => {
@@ -767,7 +788,7 @@ test("empty backup is valid JSON and read failure reports an error without downl
   assert.equal(await page.locator(".manual-button").isEnabled(), true);
 });
 
-test("date groups use local calendar days and disappear when their last bill is removed", async () => {
+test("independent search spans local dates and refreshes after deletion", async () => {
   await page.clock.install({ time: new Date("2026-11-01T08:00:00+08:00") });
   await openForm({ amount: "1", date: "2026-10-30" });
   await save();
@@ -777,12 +798,13 @@ test("date groups use local calendar days and disappear when their last bill is 
   await save();
   assert.deepEqual(await page.locator('.bill-group-title').allTextContents(), ['今天']);
   await page.locator('#open-search').click();
+  await page.locator('#reset-search').click();
   await page.locator('#search-form [type=submit]').click();
-  assert.deepEqual(await page.locator(".bill-group-title").allTextContents(), ["今天", "昨天", "更早"]);
-  assert.deepEqual(await page.locator(".bill-group").evaluateAll((groups) => groups.map((group) => [...group.querySelectorAll("time")].map((time) => time.dateTime))), [["2026-11-01"], ["2026-10-31"], ["2026-10-30"]]);
-  await confirmDeletion(page.locator(".bill-group").first().getByRole("button", { name: "删除" }));
-  await page.waitForFunction(() => document.querySelectorAll(".bill-item").length === 2);
-  assert.deepEqual(await page.locator(".bill-group-title").allTextContents(), ["昨天", "更早"]);
+  assert.equal(await page.locator('.search-result').count(), 3);
+  await page.locator('.search-result').first().click();
+  await confirmDeletion(page.locator('#delete-search-bill'));
+  await page.waitForFunction(() => document.querySelectorAll('.search-result').length === 2);
+  assert.equal((await readBills()).length, 2);
 });
 
 test("dialog follows a reduced visual viewport and keeps focused fields reachable", async () => {

@@ -81,7 +81,19 @@ export function setupCharts(pie, trend, onSelect) {
     const x = (index) => left + (right - left) * index / Math.max(1, statistics.months.length - 1);
     ctx.textAlign = "center";
     statistics.months.forEach((month, index) => { if (statistics.months.length <= 6 || index % 2 === 0 || index === 11) ctx.fillText(month.label, x(index), height - 10); });
-    for (const [type, color] of [["income", "#238779"], ["expense", "#527dc9"]]) {
+    if (statistics.yearly) {
+      const step = (right - left) / 12, bar = Math.max(2, step * 0.3);
+      statistics.months.forEach((month, index) => {
+        for (const [type, color, offset] of [['income', '#a76e7c', -bar], ['expense', '#578e85', 0]]) {
+          const h = month[type] / max * (bottom - top);
+          const fill = ctx.createLinearGradient(0, bottom - h, 0, bottom);
+          fill.addColorStop(0, color); fill.addColorStop(1, `${color}70`); ctx.fillStyle = fill;
+          ctx.fillRect(left + step * (index + 0.5) + offset, bottom - h, bar - 1, h);
+        }
+      });
+      return;
+    }
+    for (const [type, color] of [["income", "#a76e7c"], ["expense", "#578e85"]]) {
       const points = statistics.months.map((month, index) => [x(index), bottom - month[type] / max * (bottom - top)]);
       const fill = ctx.createLinearGradient(0, top, 0, bottom);
       fill.addColorStop(0, `${color}30`);

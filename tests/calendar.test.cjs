@@ -12,3 +12,9 @@ test('search combines text money dates and type with inclusive end date and reve
   assert.deepEqual(searchBills(bills, { keyword: '午餐', min: '20', max: '30', start: '2026-01-02', end: '2026-01-03', type: '支出' }).map(b => b.id), [3, 2]);
   assert.deepEqual(searchBills(bills, { type: '收入' }), []);
 });
+test('search isolates exact category and account without losing equal-date ordering', async () => {
+  const { searchBills } = await import('../js/calendar.js');
+  const bills = [1, 2, 3].map(id => ({ id, date: 1000, category: id === 3 ? '交通' : '餐饮', accountId: id === 1 ? 2 : null, amount: 10, type: '支出', remark: '午餐' }));
+  assert.deepEqual(searchBills(bills, { category: '餐饮', accountId: 'unassigned' }).map(b => b.id), [2]);
+  assert.deepEqual(searchBills(bills, { accountId: '2' }).map(b => b.id), [1]);
+});

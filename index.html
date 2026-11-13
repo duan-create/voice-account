@@ -151,12 +151,13 @@
             <div id="category-legend" aria-label="分类支出明细筛选"></div>
           </div>
           <div id="category-selection" class="category-selection" role="status" hidden><span id="selection-name"></span><strong id="selection-amount"></strong><span id="selection-percent"></span></div>
-          <h3 class="module-heading">分类支出排行</h3><ol id="category-ranking" class="manage-list"></ol>
+          <div class="section-heading module-heading"><h3>分类排行</h3><select id="ranking-type" aria-label="排行收支类型"><option>支出</option><option>收入</option></select></div><ol id="category-ranking" class="manage-list"></ol>
         </section>
         <section id="category-details" aria-labelledby="details-title" hidden>
           <h3 id="details-title"></h3>
           <ul id="detail-list"></ul>
           <p id="detail-empty" class="list-state">本月该分类暂无支出</p>
+          <button id="search-category-details" class="text-button" type="button">查看全部明细与编辑</button>
         </section>
         <section class="chart-section" aria-labelledby="trend-title">
           <div class="section-heading"><h3 id="trend-title">近6个月收支</h3></div>
@@ -235,7 +236,12 @@
         </fieldset>
       </form>
     </dialog>
-    <dialog id="search-dialog" aria-labelledby="search-title"><form id="search-form"><h2 id="search-title">搜索账单</h2><div class="form-field"><label for="search-keyword">关键词</label><input id="search-keyword" name="keyword" placeholder="备注或分类"></div><div class="form-pair"><div class="form-field"><label for="search-min">最低金额</label><input id="search-min" name="min" type="number" min="0" step="0.01"></div><div class="form-field"><label for="search-max">最高金额</label><input id="search-max" name="max" type="number" min="0" step="0.01"></div></div><div class="form-pair"><div class="form-field"><label for="search-start">开始日期</label><input id="search-start" name="start" type="date"></div><div class="form-field"><label for="search-end">结束日期</label><input id="search-end" name="end" type="date"></div></div><div class="form-field"><label for="search-type">筛选类型</label><select id="search-type" name="type"><option value="">全部</option><option>收入</option><option>支出</option></select></div><div id="search-history"></div><div class="form-actions"><button id="cancel-search" type="button" class="cancel-button">取消</button><button type="submit" class="save-button">搜索</button></div></form></dialog>
+    <section id="search-view" class="full-screen-view" aria-labelledby="search-title" hidden>
+      <div class="screen-content"><header class="section-heading"><button id="cancel-search" class="icon-button" type="button" aria-label="返回"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button><h2 id="search-title">搜索账单</h2><button id="reset-search" class="text-button" type="button">重置</button></header>
+      <form id="search-form"><div class="form-field"><label for="search-keyword">关键词</label><input id="search-keyword" name="keyword" placeholder="备注或分类" type="search"></div><div class="form-pair"><div class="form-field"><label for="search-min">最低金额</label><input id="search-min" name="min" inputmode="decimal" type="number" min="0" step="0.01"></div><div class="form-field"><label for="search-max">最高金额</label><input id="search-max" name="max" inputmode="decimal" type="number" min="0" step="0.01"></div></div><div class="form-pair"><div class="form-field"><label for="search-start">开始日期</label><input id="search-start" name="start" type="date"></div><div class="form-field"><label for="search-end">结束日期</label><input id="search-end" name="end" type="date"></div></div><div class="form-pair"><div class="form-field"><label for="search-type">收支类型</label><select id="search-type" name="type"><option value="">全部</option><option>支出</option><option>收入</option></select></div><div class="form-field"><label for="search-account">账户</label><select id="search-account" name="accountId"></select></div></div><p id="search-category-filter" class="storage-notice"></p><button class="search-submit save-button" type="submit">搜索</button></form>
+      <div class="section-heading module-heading"><h3>最近搜索</h3><button id="clear-search-history" class="text-button" type="button">清空</button></div><div id="search-history"></div><h3 id="search-count" class="module-heading"></h3><p id="search-empty" class="empty-state" hidden>没有符合条件的账单</p><ul id="search-results" class="manage-list"></ul></div>
+    </section>
+    <dialog id="bill-detail-dialog" aria-labelledby="bill-detail-title"><div class="section-heading"><h2 id="bill-detail-title">账单详情</h2><button id="close-bill-detail" class="text-button" type="button">关闭</button></div><p id="bill-detail-content"></p><div class="form-actions"><button id="edit-search-bill" class="save-button" type="button">编辑</button><button id="delete-search-bill" class="danger-button" type="button">删除</button></div></dialog>
     <dialog id="import-dialog" aria-labelledby="import-title"><h2 id="import-title">导入预览与确认</h2><pre id="import-preview"></pre><div class="form-actions"><button id="cancel-import" type="button" class="cancel-button">取消</button><button id="confirm-import" type="button" class="save-button">确认写入</button></div></dialog>
     <dialog id="asset-dialog" aria-labelledby="asset-title">
       <form id="asset-form"><h2 id="asset-title">添加账户</h2>

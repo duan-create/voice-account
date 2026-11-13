@@ -6,11 +6,12 @@ export const money = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, 
 export const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 export const categoryFor = (name) => CATEGORIES.find((item) => item.name === name) ?? CATEGORIES.find(c => c.name === '其他');
 
-export function calculateStatistics(bills, now = new Date()) {
-  const key = monthKey(now);
+export function calculateStatistics(bills, now = new Date(), yearly = false) {
+  const key = yearly ? String(now.getFullYear()) : monthKey(now);
   const categories = CATEGORIES.map((category) => ({ ...category, amount: 0 }));
-  const months = Array.from({ length: 6 }, (_, index) => {
-    const date = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1);
+  const incomeCategories = CATEGORIES.map((category) => ({ ...category, amount: 0 }));
+  const months = Array.from({ length: yearly ? 12 : 6 }, (_, index) => {
+    const date = new Date(now.getFullYear(), yearly ? index : now.getMonth() - 5 + index, 1);
     return { key: monthKey(date), label: `${date.getMonth() + 1}月`, income: 0, expense: 0 };
   });
   for (const bill of bills) {
@@ -19,16 +20,19 @@ export function calculateStatistics(bills, now = new Date()) {
     const cents = Math.round(bill.amount * 100);
     if (month && bill.type === "收入") month.income += cents;
     if (month && bill.type === "支出") month.expense += cents;
-    if (billMonth === key && bill.type === "支出") {
-      categories.find((item) => item.name === categoryFor(bill.category).name).amount += cents;
+    if (yearly ? billMonth.startsWith(`${key}-`) : billMonth === key) {
+      const target = bill.type === '收入' ? incomeCategories : categories;
+      target.find((item) => item.name === categoryFor(bill.category).name).amount += cents;
     }
   }
-  for (const item of categories) item.amount /= 100;
+  const expense = categories.reduce((s, c) => s + c.amount, 0) / 100;
+  const income = incomeCategories.reduce((s, c) => s + c.amount, 0) / 100;
+  for (const item of [...categories, ...incomeCategories]) item.amount /= 100;
   for (const item of months) {
     item.income /= 100;
     item.expense /= 100;
   }
-  return { key, income: months[5].income, expense: months[5].expense, categories, months };
+  return { key, income, expense, categories, incomeCategories, months, yearly };
 }
 
 export function calculateBudgetUsage(settings, statistics) {

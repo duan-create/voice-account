@@ -9,6 +9,7 @@ import { setupAssets } from './assets-ui.js';
 import { setupCalendar } from './calendar-ui.js';
 import { setupBackup, saveFile } from './backup-ui.js';
 import { setupPlans } from './plans-ui.js';
+import { setupSearch } from './search-ui.js';
 const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
 const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage, onDisplay: () => finance.decorate() });
 setupBackup({ refresh: refreshBills, showMessage, viewport: updateDialogViewport });
@@ -38,7 +39,8 @@ let toastTimer;
 let currentDay = localDate();
 let refreshInProgress = false;
 const voiceAvailable = () => isAndroidNative() || navigator.onLine;
-const finance = setupFinanceUI({ showMessage, updateDialogViewport });
+const search = setupSearch({ edit: openForm, remove: removeBill, showMessage, viewport: updateDialogViewport });
+const finance = setupFinanceUI({ showMessage, updateDialogViewport, openSearch: query => search.open(query) });
 
 function fitSummaryAmounts() {
   for (const element of [incomeAmount, expenseAmount]) {
@@ -141,6 +143,7 @@ async function refreshBills() {
     const [records] = await Promise.all([ledger.bills(), getMonthSummary()]);
     renderBills(records);
     bills = records;
+    search.update(records);
     listState.textContent = records.length ? "" : "暂无账单";
     listState.hidden = records.length > 0;
     document.querySelector("#empty-bills").hidden = records.length > 0;
@@ -355,6 +358,11 @@ list.addEventListener("click", async (event) => {
     openForm(bill);
     return;
   }
+  await removeBill(bill);
+});
+
+async function removeBill(bill) {
+  if (busy || !ready || voiceActive) return;
   if (!await requestDelete(`确认删除这笔${bill.category}账单（¥${money.format(bill.amount)}）？`, updateDialogViewport)) {
     showMessage("已取消删除。");
     return;
@@ -372,7 +380,7 @@ list.addEventListener("click", async (event) => {
   } finally {
     setBusy(false);
   }
-});
+}
 
 try {
   setBusy(true);

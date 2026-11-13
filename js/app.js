@@ -8,9 +8,11 @@ import { ledger } from './ledger-api.js';
 import { setupAssets } from './assets-ui.js';
 import { setupCalendar } from './calendar-ui.js';
 import { setupBackup, saveFile } from './backup-ui.js';
+import { setupPlans } from './plans-ui.js';
 const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
 const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage });
 setupBackup({ refresh: refreshBills, showMessage, viewport: updateDialogViewport });
+const plans = setupPlans({ refresh: refreshBills, showMessage, viewport: updateDialogViewport });
 
 const manualButton = document.querySelector(".manual-button");
 const voiceButton = document.querySelector(".voice-button");
@@ -104,7 +106,7 @@ function renderBills(records) {
     icon.textContent = category.icon;
     icon.style.color = category.color;
     icon.style.background = category.background;
-    item.querySelector(".bill-category").textContent = bill.category;
+    item.querySelector(".bill-category").textContent = category.label;
     const date = item.querySelector("time");
     date.dateTime = localDate(bill.date);
     date.textContent = date.dateTime;
@@ -153,6 +155,7 @@ async function refreshBills() {
     calendar.update(records);
     ready = true;
     await finance.update(records);
+    await plans.update();
   } catch (error) {
     // Do not leave stale totals or actionable stale rows after a failed refresh.
     ready = false;
@@ -261,6 +264,16 @@ async function refreshCalendar() {
 setInterval(refreshCalendar, 10000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshCalendar(); });
 window.addEventListener("focus", refreshCalendar);
+async function syncPlans() {
+  if (!ready || busy || voiceActive || document.hidden || document.querySelector('dialog[open]')) return;
+  setBusy(true);
+  try { if (await plans.sync()) await refreshBills(); }
+  catch (error) { showMessage(`计划刷新失败：${error.message}`, true); }
+  finally { setBusy(false); }
+}
+setInterval(syncPlans, 30000);
+window.addEventListener('focus', syncPlans);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncPlans(); });
 
 exportButton.addEventListener("click", async () => {
   if (busy || !ready || voiceActive) return;
@@ -373,6 +386,7 @@ try {
   setBusy(true);
   const db = await initDB();
   console.info(`[DB] Initialized: ${db.name}, version ${db.version}`);
+  await plans.sync();
   await refreshBills();
 } catch (error) {
   console.error("[DB] Initialization or loading failed:", error);

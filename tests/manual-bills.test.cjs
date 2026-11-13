@@ -141,6 +141,30 @@ async function save() {
   await waitForReady();
 }
 
+test('savings goals move funds without extra bills and scheduled plans survive reload', async () => {
+  await waitForReady();
+  await page.evaluate(async () => {
+    const { ledger } = await import('./js/ledger-api.js');
+    await ledger.saveAccount({ name: '现金', opening: 100 }); await ledger.saveAccount({ name: '存款', opening: 0 });
+  });
+  await page.reload(); await waitForReady();
+  await page.locator('#plans-tab').click(); await page.locator('#add-goal').click();
+  await page.locator('#goal-name').fill('旅行'); await page.locator('#goal-target').fill('1000'); await page.locator('#goal-daily').fill('10');
+  await page.locator('#goal-from').selectOption({ label: '现金' }); await page.locator('#goal-to').selectOption({ label: '存款' });
+  await page.locator('#plan-form [type=submit]').click(); await page.locator('#plan-dialog').waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: '今日存钱', exact: true }).click();
+  await page.getByRole('button', { name: '今日已打卡', exact: true }).waitFor();
+  assert.equal((await readBills()).length, 0);
+  assert.deepEqual(await page.evaluate(async () => (await (await import('./js/ledger-api.js')).ledger.accounts()).map(a => a.balance)), [90, 10]);
+  await page.locator('#add-schedule').click(); await page.locator('#plan-kind').selectOption('bill');
+  await page.locator('#schedule-amount').fill('5'); await page.locator('#schedule-category').selectOption('交通');
+  await page.locator('#schedule-account').selectOption({ label: '现金' });
+  await page.locator('#plan-form [type=submit]').click(); await page.locator('#plan-dialog').waitFor({ state: 'hidden' });
+  await page.reload(); await waitForReady(); await page.locator('#plans-tab').click();
+  assert.match(await page.locator('#schedule-list').textContent(), /自动记账/);
+  for (const width of [320, 375, 1024]) { await page.setViewportSize({ width, height: 812 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); }
+});
+
 test("manual entry opens a form with today's local date; cancel does not write", async () => {
   await openForm();
   const today = await page.evaluate(() => {

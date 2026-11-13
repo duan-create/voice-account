@@ -30,6 +30,22 @@ Libraries are bundled locally by npm prepare, including licenses; there is no CD
 Android opens the system Save As document picker; cancelled/failed saves report errors.
 Native document-provider compatibility still requires a device test.
 
+Plans tab: create a savings goal with separate source/destination accounts and a daily
+amount. Check-in transfers existing funds once per local day, capped at the remaining
+goal amount; insufficient funds abort everything. Saving never creates a bill or changes
+net assets. Edit/archive goals and inspect their check-in history on the same page.
+Daily/weekly plans support reminders or automatic bills, editing and enabling/disabling.
+Android uses inexact offline alarms, boot/package/time-change receivers and a durable
+SharedPreferences outbox. It records due occurrences before notifying; the WebView
+imports each unique ID in a bill/account transaction before acknowledging it. Actual
+IndexedDB bills appear when the app next synchronizes, not while the WebView is stopped.
+Denied notifications do not discard scheduled records. Doze, vendor battery policies
+and force-stop can delay execution; reopen the app after force-stop. Web/PWA only catches
+up while open. Re-enabling a plan starts at its next future time, without charging its
+disabled period. Restoring a backup resets the native scheduling epoch and starts restored
+plans at their next future time; stale pre-restore outbox records are intentionally dropped.
+Android scheduling and notification behavior still needs an APK build and device test.
+
 Android now has a custom offline Whisper plugin. See **Android 端侧离线 Whisper** below:
 building this version additionally requires the prepared model/source, NDK and CMake.
 The older web-only ZIP and Web Speech API notes do not describe the new Android voice path.

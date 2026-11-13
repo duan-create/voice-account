@@ -24,9 +24,19 @@ test('full restore preserves IDs and balances; invalid references leave existing
   const before = await snapshot(ledger);
   await restore(before, ledger);
   assert.equal((await ledger.accounts())[0].balance, 80);
+  const restored = await snapshot(ledger);
   const bad = structuredClone(before); bad.stores.billAccounts[0].accountId = 999;
   await assert.rejects(restore(bad, ledger));
-  assert.deepEqual(await snapshot(ledger), before);
+  assert.deepEqual(await snapshot(ledger), restored);
+});
+test('restore rejects malformed goal, schedule and occurrence records without writing', async () => {
+  const { snapshot, restore } = await import('../js/backup.js');
+  const ledger = await setup(); const before = await snapshot(ledger);
+  for (const [store, record] of [['goals', { id: 'g', target: -10 }], ['schedules', { id: 's', time: '99:99' }], ['occurrences', { id: 'o', kind: 'bill', date: 1, bill: {} }]]) {
+    const bad = structuredClone(before); bad.stores[store].push(record);
+    await assert.rejects(restore(bad, ledger));
+    assert.deepEqual(await snapshot(ledger), before);
+  }
 });
 test('legacy array restore keeps bills unassigned and cannot silently erase assets', async () => {
   const { restore } = await import('../js/backup.js');

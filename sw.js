@@ -1,6 +1,6 @@
 const CACHE_PREFIX = "voice-account-static-";
 // Bump the version when changing the app shell; let existing tabs finish on the old worker.
-const CACHE_NAME = `${CACHE_PREFIX}v7`;
+const CACHE_NAME = `${CACHE_PREFIX}v8`;
 const ASSETS = [
   "./index.html",
   "./capacitor.js",
@@ -16,6 +16,8 @@ const ASSETS = [
   "./js/calendar-ui.js",
   "./js/backup.js",
   "./js/backup-ui.js",
+  "./js/plans.js",
+  "./js/plans-ui.js",
   "./js/vendor/papaparse.min.js",
   "./js/vendor/exceljs.min.js",
   "./js/db.selftest.js",

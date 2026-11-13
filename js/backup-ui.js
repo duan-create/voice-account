@@ -43,7 +43,7 @@ export function setupBackup({ refresh, showMessage, viewport }) {
       if (file.name.toLowerCase().endsWith('.json')) {
         const input = JSON.parse(text), data = validateSnapshot(input);
         pending = { input };
-        document.querySelector('#import-preview').textContent = `将替换本机全部数据：${data.bills.length}笔账单、${data.accounts.length}个账户。请先导出当前完整备份。旧版账单备份不含账户和预算。`;
+        document.querySelector('#import-preview').textContent = `将替换本机全部数据：${data.bills.length}笔账单、${data.accounts.length}个账户。请先导出当前完整备份。旧版账单备份不含账户和预算。恢复后旧的原生待同步计划记录将被清除，备份中的计划从下次时间起执行。`;
       } else {
         const rows = await previewCSV(text, ledger); pending = { rows };
         document.querySelector('#import-preview').textContent = rows.map(r => `第${r.row}行 · ${r.bill.category} ${r.bill.amount}元 · ${r.errors.join('、') || '通过'}`).join('\n');

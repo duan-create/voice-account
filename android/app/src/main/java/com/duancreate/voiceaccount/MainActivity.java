@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(WhisperPlugin.class);
         registerPlugin(DocumentsPlugin.class);
+        registerPlugin(PlannerPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

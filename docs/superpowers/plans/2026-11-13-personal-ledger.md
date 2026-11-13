@@ -66,3 +66,5 @@ Files: js/voice-category.js, js/voice.js, whisper-jni.cpp, tests/voice-category.
 ## Progress
 
 - Plan approved in chat. Implementation in progress; check task boxes and append actual verification/commit evidence as work completes.
+- Tasks 1-3 committed: `8921341`, `80733df`, `76b52d1`; unit regression at module 3: 104/104. Focused browser coverage includes accounts/calendar/search/CSV/Excel/JSON.
+- Task 4 implemented: 111/111 unit tests; focused browser scenarios 3/3 (account rollback workflow, backup/import, savings and schedule persistence), 320/375/1024 width checks. Android plugin source and manifest integrated; native compilation/device execution not verified because local SDK/NDK are absent.

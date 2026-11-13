@@ -1,5 +1,6 @@
 import { ALL_STORES, request, validBill, cents } from './ledger.js';
 import { dateKey } from './calendar.js';
+import { nextTime } from './plans.js';
 
 export const HEADERS = ['日期', '类型', '金额', '分类', '备注', '账户'];
 export function tableRows(bills, accounts) {
@@ -59,6 +60,24 @@ export function validateSnapshot(input) {
     if (!billIds.has(m.id) || !accountIds.has(m.accountId) || m.delta !== cents(bill.amount) * (bill.type === '收入' ? 1 : -1)) throw new Error('账单账户关联无效。');
   }
   for (const t of data.transfers) if (!accountIds.has(t.from) || !accountIds.has(t.to) || t.from === t.to || !Number.isSafeInteger(t.amount) || t.amount <= 0) throw new Error('转账数据无效。');
+  const goalIds = new Set(data.goals.map(g => g.id)), transferIds = new Set(data.transfers.map(t => t.id));
+  for (const g of data.goals) if (!g.name || !accountIds.has(g.from) || !accountIds.has(g.to) || g.from === g.to || !Number.isSafeInteger(g.target) || g.target <= 0 || !Number.isSafeInteger(g.daily) || g.daily <= 0) throw new Error('存钱目标无效。');
+  for (const c of data.checkins) {
+    const t = data.transfers.find(t => t.id === c.transferId);
+    if (!goalIds.has(c.goalId) || !transferIds.has(c.transferId) || !Number.isFinite(c.date) || !Number.isSafeInteger(c.amount) || c.amount <= 0 || t.amount !== c.amount || t.kind !== 'saving') throw new Error('存钱打卡记录无效。');
+  }
+  for (const s of data.schedules) {
+    if (!['bill', 'reminder'].includes(s.kind) || !['daily', 'weekly'].includes(s.frequency) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(s.time) || !Number.isFinite(s.next) || (s.frequency === 'weekly' && ![0,1,2,3,4,5,6].includes(s.weekday))) throw new Error('定时计划无效。');
+    if (s.kind === 'bill') { validBill({ ...s.bill, date: s.next }); cents(s.bill.amount, true); if (s.bill.accountId != null && !accountIds.has(s.bill.accountId)) throw new Error('定时计划账户无效。'); }
+  }
+  for (const o of data.occurrences) {
+    if (!['bill', 'reminder'].includes(o.kind) || !Number.isFinite(o.date)) throw new Error('定时执行记录无效。');
+    if (o.kind === 'bill') validBill({ ...o.bill, date: o.date });
+  }
+  for (const a of data.accounts) {
+    const expected = a.openingCents + data.billAccounts.filter(m => m.accountId === a.id).reduce((v, m) => v + m.delta, 0) + data.transfers.reduce((v, t) => v + (t.to === a.id ? t.amount : t.from === a.id ? -t.amount : 0), 0);
+    if (data.journal.filter(j => j.accountId === a.id).reduce((v, j) => v + j.delta, 0) !== expected) throw new Error('账户余额与流水不一致。');
+  }
   if (data.budgets) {
     const budget = data.budgets;
     if (!budget.categories || typeof budget.categories !== 'object') throw new Error('预算数据无效。');
@@ -72,7 +91,8 @@ export async function restore(input, ledger) {
     for (const name of ALL_STORES) await request(stores[name].clear());
     for (const name of ALL_STORES) {
       if (name === 'budgets') { if (data[name]) await request(stores[name].put(data[name], 'monthly')); }
-      else for (const row of data[name]) await request(stores[name].put(row));
+      else for (const row of data[name]) await request(stores[name].put(name === 'schedules' ? { ...row, next: nextTime(row), revision: crypto.randomUUID() } : row));
     }
+    await request(stores.settings.put({ id: 'planner-epoch', value: crypto.randomUUID() }));
   });
 }

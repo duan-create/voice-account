@@ -17,7 +17,7 @@ export function searchBills(bills, filters) {
   const keyword = (filters.keyword || '').trim().toLocaleLowerCase();
   return bills.filter(b => (!keyword || `${b.remark} ${b.category} ${b.categoryLabel || ''}`.toLocaleLowerCase().includes(keyword))
     && (!filters.type || b.type === filters.type)
-    && (!filters.category || b.category === filters.category)
+    && (!filters.category || (b.categoryGroup || b.category) === filters.category)
     && (!filters.accountId || (filters.accountId === 'unassigned' ? b.accountId == null : Number(b.accountId) === Number(filters.accountId)))
     && (filters.min === '' || filters.min == null || b.amount >= Number(filters.min))
     && (filters.max === '' || filters.max == null || b.amount <= Number(filters.max))

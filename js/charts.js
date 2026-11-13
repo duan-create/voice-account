@@ -79,7 +79,7 @@ export function setupCharts(pie, trend, onSelect) {
       ctx.fillStyle = "#657184";
       ctx.fillText(value >= 10000 ? `${(value / 10000).toFixed(1)}万` : value >= 1000 ? `${(value / 1000).toFixed(1)}千` : value >= 10 ? String(Math.round(value)) : value.toFixed(1), left - 6, y + 4);
     }
-    const x = (index) => left + (right - left) * index / Math.max(1, statistics.months.length - 1);
+    const x = index => statistics.yearly ? left + (right - left) * (index + 0.5) / 12 : left + (right - left) * index / Math.max(1, statistics.months.length - 1);
     ctx.textAlign = "center";
     statistics.months.forEach((month, index) => { if (statistics.months.length <= 6 || index % 2 === 0 || index === 11) ctx.fillText(month.label, x(index), height - 10); });
     if (statistics.yearly) {

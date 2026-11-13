@@ -194,6 +194,16 @@ test('automatic backup history restores a selected copy and retains the pre-rest
   assert.equal(copies.every(c => !Object.hasOwn(c.stores, 'copies')), true);
 });
 
+test('savings has an add-account route after all accounts are intentionally archived', async () => {
+  await waitForReady();
+  await page.evaluate(async () => { const { ledger } = await import('./js/ledger-api.js'); for (const a of await ledger.accounts()) await ledger.archiveAccount(a.id); });
+  await page.reload(); await waitForReady(); await page.locator('#plans-tab').click(); await page.locator('#add-goal').click();
+  assert.equal(await page.locator('#goal-account-help').isVisible(), true);
+  assert.equal(await page.locator('#plan-form [type=submit]').isDisabled(), true);
+  await page.locator('#goal-add-account').click(); await page.locator('#asset-dialog[open]').waitFor();
+  assert.equal(await page.locator('#assets-tab').getAttribute('aria-selected'), 'true');
+});
+
 test('all refined views fit 320px and reduced motion removes recording decoration', async () => {
   await waitForReady(); await page.setViewportSize({ width: 320, height: 640 });
   for (const tab of ['home', 'statistics', 'assets', 'plans']) {

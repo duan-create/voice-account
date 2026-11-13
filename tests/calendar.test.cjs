@@ -17,4 +17,5 @@ test('search isolates exact category and account without losing equal-date order
   const bills = [1, 2, 3].map(id => ({ id, date: 1000, category: id === 3 ? '交通' : '餐饮', accountId: id === 1 ? 2 : null, amount: 10, type: '支出', remark: '午餐' }));
   assert.deepEqual(searchBills(bills, { category: '餐饮', accountId: 'unassigned' }).map(b => b.id), [2]);
   assert.deepEqual(searchBills(bills, { accountId: '2' }).map(b => b.id), [1]);
+  assert.deepEqual(searchBills([{ ...bills[0], category: '旧分类', categoryGroup: '其他' }], { category: '其他' }).map(b => b.id), [1]);
 });

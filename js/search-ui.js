@@ -14,7 +14,7 @@ export function setupSearch({ edit, remove, showMessage, viewport }) {
     detail.showModal(); viewport();
   }
   function render() {
-    const rows = searchBills(records.map(b => ({ ...b, categoryLabel: categoryFor(b.category).label })), query);
+    const rows = searchBills(records.map(b => ({ ...b, categoryLabel: categoryFor(b.category).label, categoryGroup: categoryFor(b.category).name })), query);
     document.querySelector('#search-count').textContent = `搜索结果 · ${rows.length}笔`;
     document.querySelector('#search-empty').hidden = rows.length > 0;
     document.querySelector('#search-results').replaceChildren(...rows.map(bill => {

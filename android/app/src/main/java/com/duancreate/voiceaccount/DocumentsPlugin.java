@@ -17,7 +17,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.OutputStream;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.io.FileInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -29,6 +30,7 @@ import java.util.concurrent.Executors;
 @CapacitorPlugin(name = "DocumentsPlugin")
 public class DocumentsPlugin extends Plugin {
     private final ExecutorService backups = Executors.newSingleThreadExecutor();
+    private long lastBackupTime;
     private static final String PREFIX = "voice-account-auto-";
     private static final int LIMIT = 30 * 1024 * 1024;
 
@@ -62,7 +64,10 @@ public class DocumentsPlugin extends Plugin {
                 if (json == null || json.length() > LIMIT) throw new IllegalArgumentException("Backup too large.");
                 byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
                 if (bytes.length > LIMIT) throw new IllegalArgumentException("Backup too large.");
-                long time = System.currentTimeMillis();
+                File[] previous = copies();
+                long newest = previous.length == 0 ? 0 : Long.parseLong(previous[0].getName().substring(PREFIX.length(), PREFIX.length() + 13));
+                long time = Math.max(System.currentTimeMillis(), Math.max(lastBackupTime, newest) + 1);
+                lastBackupTime = time;
                 String id = PREFIX + time + "-" + UUID.randomUUID() + ".json";
                 temp = new File(directory(), id + ".tmp");
                 try (java.io.FileOutputStream out = new java.io.FileOutputStream(temp)) { out.write(bytes); out.getFD().sync(); }
@@ -96,7 +101,11 @@ public class DocumentsPlugin extends Plugin {
                 if (!validId(id)) throw new IllegalArgumentException("Invalid backup.");
                 File file = new File(directory(), id);
                 if (!file.isFile() || file.length() > LIMIT) throw new IllegalArgumentException("Backup missing or too large.");
-                call.resolve(new JSObject().put("json", new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8)));
+                try (FileInputStream input = new FileInputStream(file); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[8192]; int count;
+                    while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
+                    call.resolve(new JSObject().put("json", bytes.toString("UTF-8")));
+                }
             } catch (Exception e) { call.reject("Cannot read backup."); }
         });
     }
@@ -121,6 +130,11 @@ public class DocumentsPlugin extends Plugin {
         if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null || result.getData().getData() == null) { call.reject("Directory selection cancelled."); return; }
         try {
             Uri uri = result.getData().getData();
+            // Only Android's on-device storage provider; never sync into cloud providers.
+            if (!"com.android.externalstorage.documents".equals(uri.getAuthority()) || !DocumentsContract.isTreeUri(uri)) {
+                call.reject("Please select a folder in this device's internal storage or SD card, not a cloud provider.");
+                return;
+            }
             int flags = result.getData().getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
             getContext().getContentResolver().takePersistableUriPermission(uri, flags);
             String previous = tree();
@@ -152,7 +166,11 @@ public class DocumentsPlugin extends Plugin {
             if (target == null) throw new IllegalStateException("Cannot create public copy.");
             try (OutputStream out = getContext().getContentResolver().openOutputStream(target, "w")) {
                 if (out == null) throw new IllegalStateException("Cannot write public copy.");
-                Files.copy(file.toPath(), out); out.flush();
+                try (FileInputStream input = new FileInputStream(file)) {
+                    byte[] buffer = new byte[8192]; int count;
+                    while ((count = input.read(buffer)) != -1) out.write(buffer, 0, count);
+                }
+                out.flush();
             } catch (Exception e) { DocumentsContract.deleteDocument(getContext().getContentResolver(), target); throw e; }
             existing.put(file.getName(), target);
         }

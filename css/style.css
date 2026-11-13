@@ -580,7 +580,7 @@ progress::-moz-progress-bar { background: linear-gradient(90deg, #7ba3f7, #165df
 #budget-category-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 0.75rem; }
 .bottom-nav { position: fixed; bottom: 0; z-index: 5; width: 100%; border-top: 1px solid var(--color-border); background: rgb(255 255 255 / 96%); padding-bottom: env(safe-area-inset-bottom, 0px); }
 .bottom-nav [role="tablist"] { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 42rem; margin: auto; }
-.bottom-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem; min-height: 4.25rem; border: 0; background: transparent; color: var(--color-muted); font-size: 0.75rem; transition: color 200ms ease, transform 120ms ease; }
+.bottom-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.25rem; min-height: 4.25rem; border: 0; background: transparent; color: var(--color-muted); font-size: 0.75rem; transition: color var(--motion) ease, transform var(--motion) ease; }
 .bottom-nav button svg { box-sizing: content-box; padding: 0.25rem 1.125rem; border-radius: 6px; transition: background 200ms ease, stroke-width 200ms ease; }
 .bottom-nav button[aria-selected="true"] { color: var(--color-primary); font-weight: 700; }
 .bottom-nav button[aria-selected="true"] svg { background: #e5efff; stroke-width: 2; }

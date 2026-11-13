@@ -86,7 +86,7 @@ export function setupBackup({ refresh, showMessage, viewport, setBusy = () => {}
         ['恢复', async () => {
           // Read before rotation: the selected oldest copy may be evicted by the safety backup.
           const data = await copies.read(item.id); validateSnapshot(data);
-          if (!await requestDelete('恢复将替换全部本地账单、账户与预算。恢复前会自动备份当前数据，是否继续？', viewport)) return;
+          if (!await requestDelete('恢复将替换全部本地账单、账户与预算。恢复前会自动备份当前数据，是否继续？', viewport, { title: '恢复这份备份？', confirm: '确认恢复' })) return;
           setBusy(true);
           try { await automatic(); await restore(data, ledger); await refresh(); await renderCopies(); showMessage('备份已恢复。'); }
           finally { setBusy(false); }
@@ -110,7 +110,7 @@ export function setupBackup({ refresh, showMessage, viewport, setBusy = () => {}
   document.querySelector('#close-settings').onclick = () => { settings.hidden = true; document.querySelector('#open-settings').focus(); };
   document.querySelector('#backup-now').onclick = async () => {
     if (running) return; running = true;
-    try { await automatic(); await renderCopies(); showMessage('本地备份已完成。'); }
+    try { const result = await automatic(); await renderCopies(); showMessage(result.warning || '本地备份已完成。', Boolean(result.warning)); }
     catch (e) { showMessage(`备份失败：${e.message}`, true); }
     finally { running = false; }
   };

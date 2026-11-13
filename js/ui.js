@@ -61,10 +61,12 @@ export function setupDisclosure(button, panel) {
   });
 }
 
-export function requestDelete(description, updateViewport) {
+export function requestDelete(description, updateViewport, { title = '删除这笔账单？', confirm = '确认删除' } = {}) {
   const dialog = document.querySelector("#delete-dialog");
   if (dialog.open) return Promise.resolve(false);
   document.querySelector("#delete-description").textContent = description;
+  document.querySelector('#delete-title').textContent = title;
+  document.querySelector('#confirm-delete').textContent = confirm;
   dialog.returnValue = "cancel";
   return new Promise((resolve) => {
     dialog.addEventListener("close", () => resolve(dialog.returnValue === "confirm"), { once: true });

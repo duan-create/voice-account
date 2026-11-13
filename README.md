@@ -669,3 +669,93 @@ Android instrumentation 测试 `WhisperAssetsTest` 可在 Studio 连接设备后
 上游来源：[whisper.cpp v1.8.2](https://github.com/ggml-org/whisper.cpp/tree/v1.8.2)、
 [量化模型](https://huggingface.co/ggerganov/whisper.cpp)、
 [OpenAI Whisper](https://github.com/openai/whisper)。发布时保留相应 MIT 许可证，不承诺模型准确率。
+
+## GitHub Actions 自动构建安卓 APK
+
+工作流为 `.github/workflows/android-build.yml`，名称 **Android Debug APK**。
+它直接使用仓库内已有的安卓原生工程，保留 WhisperPlugin、JNI 和 CMake 配置，
+不重新生成空壳、不需要本机 Android SDK / NDK，也不使用 Python 后端。
+本次只提交工作流与说明；**本地配置检查通过不等于 GitHub 云端编译或真机识别通过**。
+
+### 环境与构建步骤
+
+| 项目 | 云端配置 |
+| --- | --- |
+| 运行器 | `ubuntu-latest`，单次任务超时 60 分钟 |
+| Node.js | `22.x`，匹配 Capacitor 8.6.0 要求；`npm ci` 按锁文件安装 |
+| Java | Temurin JDK `21` |
+| Android SDK | `platforms;android-36`、`build-tools;36.0.0`、`platform-tools`、Command-line Tools |
+| 补充 Build-Tools | `35.0.0`，满足当前 AGP 8.13.0 及依赖模块的默认版本 |
+| 原生工具链 | NDK `28.2.13676358`、CMake `3.22.1`，与现有工程一致 |
+| APK | Debug，包名 `com.duancreate.voiceaccount`，不配置 Release 签名 |
+| 构建产物 | `voice-account-debug-apk`，保留 30 天，仓库或组织策略不能限制得更短 |
+
+工作流顺序：检出代码 → 安装 npm 依赖 → 原有单元测试 → 配置 JDK / SDK / NDK / CMake →
+准备 Whisper → `npx cap sync android` → `chmod +x gradlew` → `assembleDebug` → 校验 APK → 上传。
+SDK 安装步骤会自动接受 Android SDK 许可证；使用前应确认你同意相应许可条款。
+官方 Actions 及 Android 环境 Action 固定到提交 SHA；更新时应核对版本，而不是随意替换工具链。
+
+Whisper 资源复用 `scripts/prepare-android-whisper.ps1`，Ubuntu 运行器使用自带的 PowerShell：
+
+- 源码来自官方 `ggml-org/whisper.cpp` 的固定提交，由 GitHub codeload 下载。
+- 模型来自项目维护者的 Hugging Face `ggerganov/whisper.cpp` 固定版本，
+  使用 `ggml-base-q5_1.bin`，不使用仅英文的 `base.en`。
+- 两者都检查 SHA-256，不匹配即停止。源码、下载缓存和模型继续被 Git 忽略，
+  无需把约 60 MB 的模型提交仓库，也无需 API Key 或自备签名证书。
+- 模型保存到 `android/app/src/main/assets/models/ggml-base-q5_1.bin`，
+  与原生插件读取的 `models/ggml-base-q5_1.bin` 一致，随 APK 安装，不在手机首次启动时下载。
+
+Linux 构建使用 `-Dorg.gradle.java.home=$JAVA_HOME` 覆盖本机 Windows JDK 路径，
+不修改已提交的 `android/gradle.properties`，也不修改系统或全局配置。
+Gradle 限制为两个 worker，并设置 CMake 并行度为 2 以控制内存。APK 上传前检查 ZIP 完整性、内置模型 SHA-256，
+并检查 `arm64-v8a`、`x86_64` 下的 `libvoice_whisper.so` 均存在；任何检查失败都不上传。
+这些是打包检查，不会运行手机录音或推理，也不替代前文的真机验收。
+
+### 触发与查看进度
+
+1. 将本次本地提交推送到 GitHub 的 `main` 分支，例如在确认远端正确后运行
+   `git push origin main`。仅本地 commit 不会触发；以后每次向 `main` push 都自动构建。
+2. 手动构建：在 GitHub 仓库打开 **Actions > Android Debug APK > Run workflow**，
+   选择 `main` 后点击 **Run workflow**。工作流首次出现在默认分支后才有手动入口。
+3. 若仓库尚未启用 Actions，在 **Settings > Actions > General** 开启并允许工作流使用的
+   Actions；组织策略可能需要管理员放行。无需配置 Release 密钥或模型下载密钥。
+4. 在 **Actions** 打开对应提交的运行记录，进入 **Build offline Whisper APK** 查看各步骤日志。
+   首次需要下载工具链、Gradle、Maven 依赖与模型，耗时以实际日志为准。
+5. 失败时查看第一个红色步骤；模型校验、下载超时、原生编译失败等均应先排查日志，
+   不跳过校验、不删除原生插件、不把旧 APK 当作本次结果。临时网络失败可用 **Re-run jobs** 重试。
+
+GitHub 托管运行器的构建时间、缓存和产物存储受账号、仓库可见性及套餐额度限制，
+不是承诺无限免费。源码及公开模型在云端构建，手机录音不会参与构建或上传。
+
+### 下载与手机安装
+
+1. 等本次运行显示绿色成功，打开运行记录的 **Summary**。
+2. 在底部 **Artifacts** 点击 **voice-account-debug-apk**，登录 GitHub 后下载 ZIP。
+   解压得到 `app-debug.apk`；不要将产物 ZIP 直接当作安装包。
+3. 云端原始输出位置为 `android/app/build/outputs/apk/debug/app-debug.apk`，
+   不是本机已经生成同路径文件；电脑下载位置以浏览器实际保存位置为准。
+   构建日志最后的 APK SHA-256 可用于核对下载文件。30 天后产物过期，需重新构建或提前自行保存。
+4. 把 APK 传到安卓手机并用文件管理器打开，按系统提示允许该来源“安装未知应用”。
+   支持 Android 7.0 / API 24 以上的 `arm64-v8a` 设备及 `x86_64` 模拟器，不支持仅 32 位设备。
+5. 首次授权麦克风后，开启飞行模式、关闭 Wi-Fi，验证中文录音、填单和用户确认后入账，
+   同时检查手动记账、统计、预算和导出文件实际可用。无需启动电脑后端或处于同一网络。
+
+### Debug 覆盖更新注意
+
+云端临时运行器使用自动生成的默认 Debug 证书，不上传、不缓存或另行配置签名密钥。
+**不同运行的 Debug 证书可能不同**，也可能与本机或 VoltBuilder 的证书不同，
+相同包名并不保证能覆盖安装。遇到签名冲突不要直接卸载，先导出并核对账单备份；
+卸载或清除应用数据会删除本地数据。当前备份只含账单、不含预算，且尚无导入恢复功能。
+长期稳定更新需要另行规划版本号及持久签名，本工作流只用于 Debug 测试，不用于商店发布。
+
+### 本次本地校验记录（2026-11-13）
+
+- `actionlint 1.7.12`、YAML 解析和所有 Bash 步骤语法检查通过，五个 Action 的固定提交均可获取。
+- 原有单元测试 `94/94`、云端权限配置测试 `3/3` 通过；`cap sync android` 成功，
+  `www/` 与安卓网页资源的 19 个文件 SHA-256 一致。
+- 在合成 ZIP 上运行工作流中相同的 APK 检查：完整资源通过，缺模型、模型哈希错误、
+  缺 arm64 库、缺 x86_64 库均被拦截，共 `5/5`。合成 ZIP 不是编译出的 APK。
+- 干净目录中的 Whisper 源码下载、哈希校验与解压成功；本机访问 Hugging Face 下载模型超时，
+  因此未完成干净模型重新下载。本机此前准备的模型 SHA-256 与源码版本离线校验通过，
+  云端下载仍须以首次 Actions 日志为准，不改用不明镜像或跳过校验。
+- 本机没有下载 SDK / NDK、执行安卓编译或触发远端 Actions；尚未生成本次 APK，也未做真机验收。

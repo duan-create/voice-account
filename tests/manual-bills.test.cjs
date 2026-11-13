@@ -19,7 +19,7 @@ before(async () => {
   const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".json": "application/json" };
   server = createServer(async (request, response) => {
     const path = new URL(request.url, "http://localhost").pathname.slice(1) || "index.html";
-    if (!files.has(path)) {
+    if (!files.has(path) && !/^js\/[a-z][a-z-]*\.js$/.test(path)) {
       response.writeHead(404).end();
       return;
     }
@@ -65,11 +65,35 @@ async function openForm({ amount = "28.50", type = "支出", category = "餐饮"
   await page.getByRole("button", { name: "手动记账", exact: true }).click();
   await page.locator("#bill-dialog[open]").waitFor({ timeout: 2000 });
   await page.getByRole("radio", { name: type, exact: true }).check();
-  await page.getByLabel("金额（元）").fill(amount);
+  await page.getByLabel("金额（元）", { exact: true }).fill(amount);
   await page.getByLabel("分类", { exact: true }).selectOption(category);
   await page.getByLabel("备注", { exact: true }).fill(remark);
   if (date) await page.getByLabel("日期", { exact: true }).fill(date);
 }
+
+test('assets form links a bill to an account and edit/delete restore its balance', async () => {
+  await waitForReady();
+  await page.locator('#assets-tab').click();
+  await page.locator('#add-account').click();
+  await page.locator('#account-name').fill('测试银行卡');
+  await page.locator('#opening-balance').fill('1000');
+  await page.locator('#asset-form [type=submit]').click();
+  await page.locator('#asset-dialog').waitFor({ state: 'hidden' });
+  await page.waitForFunction(() => document.querySelector('#total-assets').textContent === '1,000.00');
+  await page.locator('#home-tab').click();
+  await openForm();
+  await page.locator('#bill-account').selectOption({ label: '测试银行卡' });
+  await page.locator('#bill-form [type=submit]').click();
+  await page.locator('#bill-dialog').waitFor({ state: 'hidden' });
+  await waitForReady();
+  await page.locator('#assets-tab').click();
+  assert.equal(await page.locator('#total-assets').textContent(), '971.50');
+  await page.locator('#home-tab').click();
+  await confirmDeletion(page.locator('.bill-delete'));
+  await waitForReady();
+  await page.locator('#assets-tab').click();
+  assert.equal(await page.locator('#total-assets').textContent(), '1,000.00');
+});
 
 async function save() {
   await page.getByRole("button", { name: "确认", exact: true }).click();
@@ -84,7 +108,8 @@ test("manual entry opens a form with today's local date; cancel does not write",
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   });
   assert.equal(await page.getByLabel("日期", { exact: true }).inputValue(), today);
-  assert.deepEqual(await page.getByLabel("分类", { exact: true }).locator("option").allTextContents(), ["餐饮", "交通", "购物", "住宿", "娱乐", "其他"]);
+  const categories = await page.getByLabel('分类', { exact: true }).locator('option').evaluateAll(options => options.map(o => o.value));
+  for (const name of ['餐饮', '交通', '购物', '住宿', '娱乐', '其他', '医疗', '工资']) assert.ok(categories.includes(name));
   await page.getByRole("button", { name: "取消", exact: true }).click();
   assert.equal(await page.locator("dialog[open]").count(), 0);
   assert.deepEqual(await readBills(), []);
@@ -237,11 +262,11 @@ test("press/release recognizes Chinese and fills the existing form without savin
   assert.deepEqual(await page.evaluate(() => window.speechCalls), ["start", "stop"]);
   await page.evaluate(() => { window.speech.result("中午吃面花了二十八块"); window.speech.end(); });
   await page.locator("#bill-dialog[open]").waitFor();
-  assert.equal(await page.getByLabel("金额（元）").inputValue(), "28");
+  assert.equal(await page.getByLabel("金额（元）", { exact: true }).inputValue(), "28");
   assert.equal(await page.getByLabel("分类", { exact: true }).inputValue(), "餐饮");
   assert.equal(await page.getByLabel("备注", { exact: true }).inputValue(), "中午吃面");
   assert.deepEqual(await readBills(), []);
-  await page.getByLabel("金额（元）").fill("29");
+  await page.getByLabel("金额（元）", { exact: true }).fill("29");
   await save();
   assert.equal((await readBills())[0].amount, 29);
 });
@@ -253,7 +278,7 @@ test("touch release before recognition starts still stops and missing amount req
   await page.evaluate(() => window.speech.onstart());
   assert.deepEqual(await page.evaluate(() => window.speechCalls), ["start", "stop"]);
   await page.evaluate(() => { window.speech.result("昨天吃饭"); window.speech.end(); });
-  assert.equal(await page.getByLabel("金额（元）").inputValue(), "");
+  assert.equal(await page.getByLabel("金额（元）", { exact: true }).inputValue(), "");
   assert.match(await page.locator("#form-message").innerText(), /未识别到金额，请手动补充/);
   const today = await page.evaluate(() => {
     const d = new Date();
@@ -312,7 +337,7 @@ test("only final results fill once; conflicting categories fall back to other", 
   });
   await page.mouse.up();
   await page.evaluate(() => window.speech.end());
-  assert.equal(await page.getByLabel("金额（元）").inputValue(), "50");
+  assert.equal(await page.getByLabel("金额（元）", { exact: true }).inputValue(), "50");
   assert.equal(await page.getByLabel("分类", { exact: true }).inputValue(), "其他");
   assert.deepEqual(await readBills(), []);
   await page.getByRole("button", { name: "取消", exact: true }).click();
@@ -330,14 +355,14 @@ test("recognition ending early waits for release; a new session ignores late eve
   await page.evaluate(() => { window.oldSpeech = window.speech; window.speech.result("工资收入五千元"); window.speech.end(); });
   assert.equal(await page.locator("dialog[open]").count(), 0);
   await page.mouse.up();
-  assert.equal(await page.getByLabel("金额（元）").inputValue(), "5000");
+  assert.equal(await page.getByLabel("金额（元）", { exact: true }).inputValue(), "5000");
   await page.getByRole("button", { name: "取消", exact: true }).click();
   await holdVoice();
   await page.evaluate(() => { window.oldSpeech.result("花了20元"); window.oldSpeech.end(); });
   assert.equal(await page.locator("dialog[open]").count(), 0);
   await page.mouse.up();
   await page.evaluate(() => { window.speech.result("收入一百元"); window.speech.end(); });
-  assert.equal(await page.getByLabel("金额（元）").inputValue(), "100");
+  assert.equal(await page.getByLabel("金额（元）", { exact: true }).inputValue(), "100");
   assert.deepEqual(await readBills(), []);
 });
 
@@ -375,10 +400,10 @@ test("add, reload, edit and delete keep the list and monthly totals consistent",
   await waitForReady();
   assert.equal(await page.locator(".bill-item").count(), 1);
   await page.getByRole("button", { name: "编辑", exact: true }).click();
-  assert.equal(await page.getByLabel("金额（元）").inputValue(), "28.5");
+  assert.equal(await page.getByLabel("金额（元）", { exact: true }).inputValue(), "28.5");
   assert.equal(await page.getByLabel("备注", { exact: true }).inputValue(), "午餐");
   await page.getByRole("radio", { name: "收入", exact: true }).check();
-  await page.getByLabel("金额（元）").fill("100.20");
+  await page.getByLabel("金额（元）", { exact: true }).fill("100.20");
   await page.getByLabel("分类", { exact: true }).selectOption("其他");
   await save();
   assert.match(await page.locator("#app-message").innerText(), /已更新/);
@@ -398,13 +423,13 @@ test("add, reload, edit and delete keep the list and monthly totals consistent",
 test("invalid amounts and empty dates stay in the form and never write", async () => {
   await openForm();
   for (const amount of ["", "0", "-1", "1.001"]) {
-    await page.getByLabel("金额（元）").fill(amount);
+    await page.getByLabel("金额（元）", { exact: true }).fill(amount);
     await page.getByRole("button", { name: "确认", exact: true }).click();
     assert.equal(await page.locator("#bill-dialog[open]").count(), 1);
     assert.ok((await page.locator("#form-message").innerText()).length > 0);
     assert.deepEqual(await readBills(), []);
   }
-  await page.getByLabel("金额（元）").fill("1.20");
+  await page.getByLabel("金额（元）", { exact: true }).fill("1.20");
   await page.getByLabel("日期", { exact: true }).fill("");
   await page.getByRole("button", { name: "确认", exact: true }).click();
   assert.match(await page.locator("#form-message").innerText(), /日期/);
@@ -441,7 +466,7 @@ test("write failures keep form data and committed writes are not retried after r
   });
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await page.waitForFunction(() => document.querySelector("#form-message").textContent.includes("失败"));
-  assert.equal(await page.getByLabel("金额（元）").inputValue(), "28.50");
+  assert.equal(await page.getByLabel("金额（元）", { exact: true }).inputValue(), "28.50");
   assert.deepEqual(await readBills(), []);
   await page.evaluate(() => {
     IDBDatabase.prototype.transaction = function (name, mode, ...rest) {
@@ -471,7 +496,7 @@ test("duplicate submits write once; failed edit and delete leave the bill unchan
   await waitForReady();
   assert.equal((await readBills()).length, 1);
   await page.getByRole("button", { name: "编辑", exact: true }).click();
-  await page.getByLabel("金额（元）").fill("99");
+  await page.getByLabel("金额（元）", { exact: true }).fill("99");
   await page.evaluate(() => {
     window.originalTransaction = IDBDatabase.prototype.transaction;
     IDBDatabase.prototype.transaction = function (name, mode, ...rest) {
@@ -511,11 +536,11 @@ test("editing a record deleted elsewhere reports failure instead of silently ins
   const [bill] = await readBills();
   await page.getByRole("button", { name: "编辑", exact: true }).click();
   await page.evaluate(async (id) => (await import("./js/db.js")).deleteBill(id), bill.id);
-  await page.getByLabel("金额（元）").fill("99");
+  await page.getByLabel("金额（元）", { exact: true }).fill("99");
   await page.getByRole("button", { name: "确认", exact: true }).click();
   await page.waitForFunction(() => document.querySelector("#form-message").textContent.includes("失败"));
   assert.equal(await page.locator("#bill-dialog[open]").count(), 1);
-  assert.equal(await page.getByLabel("金额（元）").inputValue(), "99");
+  assert.equal(await page.getByLabel("金额（元）", { exact: true }).inputValue(), "99");
   assert.deepEqual(await readBills(), []);
 });
 
@@ -544,7 +569,7 @@ test("offline reload serves the full shell and manual CRUD without network", asy
   await openForm({ amount: "10", type: "收入" });
   await save();
   await page.locator(".bill-item-income").getByRole("button", { name: "编辑" }).click();
-  await page.getByLabel("金额（元）").fill("12");
+  await page.getByLabel("金额（元）", { exact: true }).fill("12");
   await save();
   assert.equal(await page.locator("#month-income").innerText(), "12.00");
   await confirmDeletion(page.locator(".bill-item-income").getByRole("button", { name: "删除" }));
@@ -578,7 +603,7 @@ test("going offline cancels active voice input and reconnecting restores its ent
   await holdVoice();
   await page.mouse.up();
   await page.evaluate(() => { window.speech.result("收入一百元"); window.speech.end(); });
-  assert.equal(await page.getByLabel("金额（元）").inputValue(), "100");
+  assert.equal(await page.getByLabel("金额（元）", { exact: true }).inputValue(), "100");
   assert.deepEqual(await readBills(), []);
 });
 
@@ -685,7 +710,10 @@ test("v1 database upgrades without losing bill fields or the auto-increment key"
     const store = db.transaction("bills").objectStore("bills");
     return { version: db.version, stores: [...db.objectStoreNames], keyPath: store.keyPath, autoIncrement: store.autoIncrement };
   });
-  assert.deepEqual(schema, { version: 2, stores: ["bills", "budgets"], keyPath: "id", autoIncrement: true });
+  assert.equal(schema.version, 3);
+  assert.ok(schema.stores.includes('bills') && schema.stores.includes('budgets') && schema.stores.includes('accounts'));
+  assert.equal(schema.keyPath, 'id');
+  assert.equal(schema.autoIncrement, true);
   await openForm();
   await save();
   assert.ok((await readBills()).some((bill) => bill.id === 18));

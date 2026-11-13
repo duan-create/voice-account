@@ -1,12 +1,4 @@
-function validateBill(bill) {
-  if (!["收入", "支出"].includes(bill.type)
-    || !Number.isFinite(bill.amount)
-    || !Number.isFinite(bill.date)
-    || typeof bill.category !== "string"
-    || typeof bill.remark !== "string") {
-    throw new TypeError("A bill requires a valid type, numeric amount/date and string category/remark.");
-  }
-}
+import { createLedger, EXTRA_STORES } from './ledger.js';
 
 // The factory lets the console self-test use a separate database.
 export function createBillDB(name = "voice-account-db") {
@@ -15,13 +7,18 @@ export function createBillDB(name = "voice-account-db") {
   function initDB() {
     if (!dbPromise) {
       dbPromise = new Promise((resolve, reject) => {
-        const request = indexedDB.open(name, 2);
+        const request = indexedDB.open(name, 3);
         request.onupgradeneeded = () => {
           const db = request.result;
           if (!db.objectStoreNames.contains("bills")) {
             db.createObjectStore("bills", { keyPath: "id", autoIncrement: true });
           }
           if (!db.objectStoreNames.contains("budgets")) db.createObjectStore("budgets");
+          for (const store of EXTRA_STORES) {
+            if (!db.objectStoreNames.contains(store)) {
+              db.createObjectStore(store, store === 'categories' ? { keyPath: 'name' } : { keyPath: 'id', autoIncrement: ['accounts', 'journal', 'transfers', 'checkins'].includes(store) });
+            }
+          }
         };
         request.onsuccess = () => {
           const db = request.result;
@@ -60,21 +57,8 @@ export function createBillDB(name = "voice-account-db") {
     });
   }
 
-  async function addBill(bill) {
-    const record = {
-      type: bill.type,
-      amount: bill.amount,
-      category: bill.category,
-      remark: bill.remark ?? "",
-      date: bill.date,
-      createdAt: Date.now()
-    };
-    validateBill(record);
-    return transact("readwrite", (store, done) => {
-      const request = store.add(record);
-      request.onsuccess = () => done(request.result);
-    });
-  }
+  const ledger = createLedger(initDB);
+  const addBill = bill => ledger.saveBill(null, { ...bill, remark: bill.remark ?? '' });
 
   async function getBills() {
     const bills = await transact("readonly", (store, done) => {
@@ -84,32 +68,9 @@ export function createBillDB(name = "voice-account-db") {
     return bills.sort((a, b) => b.date - a.date);
   }
 
-  function updateBill(id, bill) {
-    return transact("readwrite", (store, done, fail) => {
-      const request = store.get(id);
-      request.onsuccess = () => {
-        if (!request.result) {
-          done(null);
-          return;
-        }
-        try {
-          const record = { ...request.result, ...bill, id, createdAt: request.result.createdAt };
-          validateBill(record);
-          const update = store.put(record);
-          update.onsuccess = () => done(record);
-        } catch (error) {
-          fail(error);
-        }
-      };
-    });
-  }
+  const updateBill = (id, bill) => ledger.saveBill(id, bill);
 
-  function deleteBill(id) {
-    return transact("readwrite", (store, done) => {
-      const request = store.delete(id);
-      request.onsuccess = () => done();
-    });
-  }
+  const deleteBill = id => ledger.removeBill(id);
 
   async function getMonthSummary() {
     const now = new Date();

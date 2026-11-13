@@ -41,7 +41,8 @@ test("new month reuses limits but recalculates usage with no carryover", async (
 test("empty statistics and unset budgets have no warnings; reaching a limit is not overspending", async () => {
   const { calculateStatistics, calculateBudgetUsage } = await load();
   const empty = calculateStatistics([], new Date("2026-02-01T00:00:00"));
-  assert.equal(empty.categories.length, 6);
+  assert.ok(empty.categories.some(c => c.name === '医疗'));
+  assert.ok(empty.categories.some(c => c.name === '工资'));
   assert.equal(empty.months.length, 6);
   assert.equal(empty.expense, 0);
   assert.deepEqual(calculateBudgetUsage({ total: null, categories: {} }, empty), { total: null, categories: {} });

@@ -1,15 +1,10 @@
-export const CATEGORIES = [
-  { name: "餐饮", icon: "🍜", color: "#c45c38", background: "#fff0e9" },
-  { name: "交通", icon: "🚇", color: "#4274c4", background: "#edf3ff" },
-  { name: "购物", icon: "🛍", color: "#ac5889", background: "#fceef6" },
-  { name: "住宿", icon: "🏠", color: "#967126", background: "#faf3df" },
-  { name: "娱乐", icon: "🎬", color: "#238779", background: "#e6f6f1" },
-  { name: "其他", icon: "📌", color: "#717a8c", background: "#eff1f5" }
-];
+import { DEFAULT_CATEGORIES } from './categories.js';
+export const CATEGORIES = DEFAULT_CATEGORIES.map(c => ({ ...c }));
+export function setCategories(categories) { CATEGORIES.splice(0, CATEGORIES.length, ...categories); }
 
 export const money = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-export const categoryFor = (name) => CATEGORIES.find((item) => item.name === name) ?? CATEGORIES[5];
+export const categoryFor = (name) => CATEGORIES.find((item) => item.name === name) ?? CATEGORIES.find(c => c.name === '其他');
 
 export function calculateStatistics(bills, now = new Date()) {
   const key = monthKey(now);

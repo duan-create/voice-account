@@ -1,5 +1,16 @@
 # Voice Account PWA / Android Shell
 
+## Personal Ledger Upgrade (In Progress)
+
+Accounts and categories: use the Assets tab. Add a bank/wallet with an opening balance
+(negative balances represent debt); select an account in the existing bill form.
+Old bills remain unassigned and never change new opening balances. Bill mutations and
+account journal entries share a transaction. Edits/deletions append reversal entries.
+Transfers move funds only, never income/expense. Referenced accounts/categories are
+archived rather than erased; renaming a category preserves its original historical key.
+The v3 upgrade adds stores without rewriting existing bills or budgets. Asset totals
+include archived balances. The chart and journal show posted asset changes.
+
 Android now has a custom offline Whisper plugin. See **Android 端侧离线 Whisper** below:
 building this version additionally requires the prepared model/source, NDK and CMake.
 The older web-only ZIP and Web Speech API notes do not describe the new Android voice path.

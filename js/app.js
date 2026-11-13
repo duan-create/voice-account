@@ -4,6 +4,9 @@ import { isAndroidNative } from "./native-voice.js";
 import { categoryFor } from "./finance.js";
 import { setupFinanceUI } from "./finance-ui.js";
 import { animateAmount, stopAmountAnimation, requestDelete, fitAmount } from "./ui.js";
+import { ledger } from './ledger-api.js';
+import { setupAssets } from './assets-ui.js';
+const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
 
 const manualButton = document.querySelector(".manual-button");
 const voiceButton = document.querySelector(".voice-button");
@@ -128,7 +131,8 @@ function renderBills(records) {
 
 async function refreshBills() {
   try {
-    const [records, summary] = await Promise.all([getBills(), getMonthSummary()]);
+    await assets.update();
+    const [records, summary] = await Promise.all([ledger.bills(), getMonthSummary()]);
     renderBills(records);
     bills = records;
     stopAmountAnimation(incomeAmount);
@@ -170,6 +174,8 @@ function openForm(bill = null) {
   fields.namedItem("type").value = bill?.type ?? "支出";
   fields.namedItem("amount").value = bill?.amount ?? "";
   fields.namedItem("category").value = bill?.category ?? "餐饮";
+  if (bill && !fields.namedItem('category').value) fields.namedItem('category').add(new Option(bill.category, bill.category, true, true));
+  assets.fillAccount(bill?.accountId);
   fields.namedItem("remark").value = bill?.remark ?? "";
   fields.namedItem("date").value = localDate(bill?.date);
   formMessage.textContent = "";
@@ -309,6 +315,7 @@ form.addEventListener("submit", async (event) => {
     category: fields.namedItem("category").value,
     remark: fields.namedItem("remark").value.trim(),
     date
+    , accountId: fields.namedItem('accountId').value || null
   };
   const editing = editingId !== null;
   let committed = false;

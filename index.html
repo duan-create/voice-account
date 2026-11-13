@@ -107,6 +107,14 @@
         </button>
       </footer>
       </div>
+      <div id="assets-view" role="tabpanel" aria-labelledby="assets-tab" hidden>
+        <div class="section-heading"><h2>我的资产</h2><button id="add-account" class="text-button" type="button">＋ 添加账户</button></div>
+        <dl class="asset-totals"><div><dt>总资产</dt><dd id="total-assets">0.00</dd></div><div><dt>总负债</dt><dd id="total-debt">0.00</dd></div><div><dt>净资产</dt><dd id="net-assets">0.00</dd></div></dl>
+        <button id="new-transfer" class="backup-button" type="button">⇄ 账户转账</button>
+        <p id="account-empty" class="list-state">还没有账户</p><ul id="account-list" class="manage-list"></ul>
+        <h3 class="module-heading">资产变动记录</h3><canvas id="asset-trend" aria-label="净资产历史变化" role="img"></canvas><ul id="asset-history" class="manage-list"></ul>
+        <div class="section-heading module-heading"><h3>记账分类</h3><button id="add-category" class="text-button" type="button">＋ 添加分类</button></div><ul id="category-list" class="manage-list"></ul>
+      </div>
       <div id="statistics-view" role="tabpanel" aria-labelledby="statistics-tab" hidden>
         <div class="section-heading statistics-heading"><h2>收支统计</h2></div>
         <div class="month-switcher" aria-label="统计月份">
@@ -152,6 +160,7 @@
         <button id="statistics-tab" type="button" role="tab" aria-selected="false" aria-controls="statistics-view" tabindex="-1">
           <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M8 16v-5M13 16V7M18 16v-8" /></svg><span>统计</span>
         </button>
+        <button id="assets-tab" type="button" role="tab" aria-selected="false" aria-controls="assets-view" tabindex="-1"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M3 9h18M16 14h3"/></svg><span>资产</span></button>
       </div>
     </nav>
     <p id="app-message" class="app-message" role="status" aria-live="polite"></p>
@@ -181,6 +190,9 @@
             </select>
           </div>
           <div class="form-field">
+            <label for="bill-account">账户</label><select id="bill-account" name="accountId"><option value="">未指定账户</option></select>
+          </div>
+          <div class="form-field">
             <label for="bill-remark">备注</label>
             <textarea id="bill-remark" name="remark" rows="2"></textarea>
           </div>
@@ -194,6 +206,14 @@
             <button class="save-button" type="submit">确认</button>
           </div>
         </fieldset>
+      </form>
+    </dialog>
+    <dialog id="asset-dialog" aria-labelledby="asset-title">
+      <form id="asset-form"><h2 id="asset-title">添加账户</h2>
+        <fieldset data-mode="account"><div class="form-field"><label for="account-name">账户名称</label><input id="account-name" name="accountName" maxlength="50" required></div><div class="form-field"><label for="bank-name">银行 / 平台</label><select id="bank-name" name="bank"></select></div><div class="form-field"><label for="opening-balance">初始余额（元，负数为负债）</label><input id="opening-balance" name="opening" type="number" step="0.01" value="0" required></div></fieldset>
+        <fieldset data-mode="transfer" hidden disabled><div class="form-field"><label for="transfer-from">转出账户</label><select id="transfer-from" name="from" required></select></div><div class="form-field"><label for="transfer-to">转入账户</label><select id="transfer-to" name="to" required></select></div><div class="form-field"><label for="transfer-amount">转账金额（元）</label><input id="transfer-amount" name="transferAmount" type="number" inputmode="decimal" min="0.01" step="0.01" required></div><div class="form-field"><label for="transfer-remark">转账备注</label><input id="transfer-remark" name="transferRemark"></div></fieldset>
+        <fieldset data-mode="category" hidden disabled><div class="form-field"><label for="category-name">分类名称</label><input id="category-name" name="categoryName" maxlength="30" required></div><div class="form-field"><label for="category-type">适用类型</label><select id="category-type" name="categoryType"><option>支出</option><option>收入</option><option>通用</option></select></div><div class="form-field"><label for="category-icon">图标</label><input id="category-icon" name="icon" value="📌" maxlength="12" required></div><div class="form-field"><label for="category-color">分类颜色</label><input id="category-color" name="color" type="color" value="#557fc4"></div><div class="form-field"><label for="category-aliases">语音别名（逗号分隔）</label><input id="category-aliases" name="aliases"></div></fieldset>
+        <p id="asset-error" class="form-message" role="alert"></p><div class="form-actions"><button id="cancel-asset" class="cancel-button" type="button">取消</button><button class="save-button" type="submit">保存</button></div>
       </form>
     </dialog>
     <dialog id="budget-dialog" aria-labelledby="budget-form-title">

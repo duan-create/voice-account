@@ -9,13 +9,14 @@
     "prepare:web": "node scripts/prepare-web.cjs",
     "capacitor:copy:before": "node scripts/prepare-web.cjs",
     "sync:android": "cap sync android",
-    "test": "node --test tests/voice-parser.test.cjs tests/prepare-web.test.cjs tests/finance.test.cjs tests/native-voice.test.cjs"
+    "test": "node --test tests/voice-parser.test.cjs tests/prepare-web.test.cjs tests/finance.test.cjs tests/native-voice.test.cjs tests/ledger.test.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.6.0",
     "@capacitor/core": "8.6.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "8.6.0"
+    "@capacitor/cli": "8.6.0",
+    "fake-indexeddb": "^6.2.5"
   }
 }

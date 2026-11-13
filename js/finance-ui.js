@@ -26,6 +26,8 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
 
   const charts = setupCharts(document.querySelector("#category-chart"), document.querySelector("#trend-chart"), selectCategory);
   setupDisclosure(document.querySelector("#trend-disclosure"), document.querySelector("#trend-panel"));
+  function buildBudgetFields() {
+  document.querySelector('#budget-category-fields').replaceChildren();
   for (const [index, category] of CATEGORIES.entries()) {
     const field = document.createElement("div");
     field.className = "form-field";
@@ -37,6 +39,8 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     field.append(label, input);
     document.querySelector("#budget-category-fields").append(field);
   }
+  }
+  buildBudgetFields();
 
   function selectCategory(name) {
     selected = name;
@@ -240,7 +244,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     tab.addEventListener("keydown", (event) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
       event.preventDefault();
-      const next = event.key === "Home" ? tabs[0] : event.key === "End" ? tabs[1] : tabs[1 - index];
+      const next = event.key === "Home" ? tabs[0] : event.key === "End" ? tabs.at(-1) : tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
       switchTab(next);
       next.focus();
     });
@@ -267,6 +271,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
       nextMonth.disabled = !value || statistics.key >= monthKey(new Date());
     },
     async update(bills) {
+      if (!budgetDialog.open) buildBudgetFields();
       records = bills;
       currentStatistics = calculateStatistics(bills);
       statistics = selectedMonth ? calculateStatistics(bills, selectedMonth) : currentStatistics;

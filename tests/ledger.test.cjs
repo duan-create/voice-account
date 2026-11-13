@@ -90,3 +90,28 @@ test('accounts used by active goals or schedules cannot be archived underneath t
   await assert.rejects(ledger.archiveAccount(id));
   assert.equal((await ledger.accounts())[0].archived, false);
 });
+
+test('default accounts initialize once without touching existing funds or legacy bills', async () => {
+  const { bills, ledger } = await setup();
+  const legacy = await bills.addBill(draft);
+  const cash = await ledger.saveAccount({ name: '现金', opening: 123.45 });
+  await Promise.all([ledger.ensureDefaultAccounts(), ledger.ensureDefaultAccounts()]);
+  const accounts = await ledger.accounts();
+  assert.equal(accounts.length, 8);
+  assert.equal(accounts.find(a => a.id === cash).balance, 123.45);
+  assert.equal(accounts.filter(a => a.id !== cash).every(a => a.balance === 0), true);
+  assert.equal((await ledger.bills()).find(b => b.id === legacy).accountId, null);
+  await ledger.archiveAccount(accounts.find(a => a.name === '微信').id);
+  await ledger.ensureDefaultAccounts();
+  assert.equal((await ledger.accounts()).length, 8);
+  assert.equal((await ledger.accounts()).find(a => a.name === '微信').archived, true);
+});
+
+test('an archived matching account is not duplicated by the one-time migration', async () => {
+  const { ledger } = await setup();
+  const id = await ledger.saveAccount({ name: '支付宝', opening: 80 });
+  await ledger.archiveAccount(id);
+  await ledger.ensureDefaultAccounts();
+  assert.equal((await ledger.accounts()).filter(a => a.name === '支付宝').length, 1);
+  assert.equal((await ledger.accounts()).find(a => a.id === id).balance, 80);
+});

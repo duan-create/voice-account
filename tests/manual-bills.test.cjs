@@ -180,7 +180,8 @@ test('savings goals move funds without extra bills and scheduled plans survive r
   await waitForReady();
   await page.evaluate(async () => {
     const { ledger } = await import('./js/ledger-api.js');
-    await ledger.saveAccount({ name: '现金', opening: 100 }); await ledger.saveAccount({ name: '存款', opening: 0 });
+    const cash = (await ledger.accounts()).find(a => a.name === '现金');
+    await ledger.saveAccount({ ...cash, opening: 100 }); await ledger.saveAccount({ name: '存款', opening: 0 });
   });
   await page.reload(); await waitForReady();
   await page.locator('#plans-tab').click(); await page.locator('#add-goal').click();
@@ -190,7 +191,7 @@ test('savings goals move funds without extra bills and scheduled plans survive r
   await page.getByRole('button', { name: '今日存钱', exact: true }).click();
   await page.getByRole('button', { name: '今日已打卡', exact: true }).waitFor();
   assert.equal((await readBills()).length, 0);
-  assert.deepEqual(await page.evaluate(async () => (await (await import('./js/ledger-api.js')).ledger.accounts()).map(a => a.balance)), [90, 10]);
+  assert.deepEqual(await page.evaluate(async () => (await (await import('./js/ledger-api.js')).ledger.accounts()).filter(a => ['现金', '存款'].includes(a.name)).map(a => a.balance)), [90, 10]);
   await page.locator('#add-schedule').click(); await page.locator('#plan-kind').selectOption('bill');
   await page.locator('#schedule-amount').fill('5'); await page.locator('#schedule-category').selectOption('交通');
   await page.locator('#schedule-account').selectOption({ label: '现金' });

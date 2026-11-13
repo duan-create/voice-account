@@ -12,7 +12,7 @@ import { setupPlans } from './plans-ui.js';
 const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
 const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage, onDisplay: () => finance.decorate() });
 setupBackup({ refresh: refreshBills, showMessage, viewport: updateDialogViewport });
-const plans = setupPlans({ refresh: refreshBills, showMessage, viewport: updateDialogViewport });
+const plans = setupPlans({ refresh: refreshBills, showMessage, viewport: updateDialogViewport, addAccount: () => { document.querySelector('#assets-tab').click(); assets.openAccount(); } });
 
 const manualButton = document.querySelector(".manual-button");
 const voiceButton = document.querySelector(".voice-button");
@@ -378,6 +378,7 @@ try {
   setBusy(true);
   const db = await initDB();
   console.info(`[DB] Initialized: ${db.name}, version ${db.version}`);
+  await ledger.ensureDefaultAccounts();
   await plans.sync();
   await refreshBills();
 } catch (error) {

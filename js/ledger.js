@@ -88,6 +88,19 @@ export function createLedger(openDB) {
   const billStores = ['bills', 'billAccounts', 'accounts', 'journal'];
   const api = {
     transact, all, put, mutateBill, move,
+    ensureDefaultAccounts() {
+      return transact(['accounts', 'journal', 'settings'], 'readwrite', async s => {
+        const key = 'default-accounts-v1';
+        if (await request(s.settings.get(key))) return;
+        const names = new Set((await request(s.accounts.getAll())).map(a => a.name));
+        for (const name of ['微信', '支付宝', '现金', '工商银行', '农业银行', '中国银行', '建设银行', '储蓄卡']) {
+          if (names.has(name)) continue;
+          const id = await request(s.accounts.add({ name, bank: name, openingCents: 0, archived: false, createdAt: Date.now() }));
+          await append(s, id, 0, 'opening', id);
+        }
+        await request(s.settings.put({ id: key, value: true }));
+      });
+    },
     async accounts() {
       return transact(['accounts', 'journal'], 'readonly', async s => {
         const [accounts, journal] = await Promise.all([request(s.accounts.getAll()), request(s.journal.getAll())]);

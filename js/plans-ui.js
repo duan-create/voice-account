@@ -4,7 +4,7 @@ import { money, CATEGORIES } from './finance.js';
 import { isAndroidNative } from './native-voice.js';
 import { dateKey } from './calendar.js';
 
-export function setupPlans({ refresh, showMessage, viewport }) {
+export function setupPlans({ refresh, showMessage, viewport, addAccount }) {
   const plans = createPlans(ledger), native = isAndroidNative() ? window.Capacitor.registerPlugin('PlannerPlugin') : null;
   const dialog = document.querySelector('#plan-dialog'), form = document.querySelector('#plan-form');
   let mode = 'goal', syncing = false, editing = null;
@@ -30,6 +30,11 @@ export function setupPlans({ refresh, showMessage, viewport }) {
     for (const group of form.querySelectorAll('[data-plan]')) { group.hidden = group.dataset.plan !== mode; group.disabled = group.hidden; }
     const accounts = (await ledger.accounts()).filter(a => !a.archived);
     for (const name of ['goalFrom', 'goalTo', 'scheduleAccount']) form.elements.namedItem(name).replaceChildren(...(name === 'scheduleAccount' ? [new Option('未指定账户', '')] : []), ...accounts.map(a => new Option(a.name, a.id)));
+    const needsAccounts = mode === 'goal' && accounts.length < 2;
+    document.querySelector('#goal-account-help').hidden = !needsAccounts;
+    form.querySelector('[type=submit]').disabled = needsAccounts;
+    if (!accounts.length) for (const name of ['goalFrom', 'goalTo']) form.elements.namedItem(name).add(new Option('请先添加账户', ''));
+    if (accounts.length > 1) form.elements.namedItem('goalTo').selectedIndex = 1;
     form.elements.namedItem('scheduleCategory').replaceChildren(...CATEGORIES.filter(c => !c.archived).map(c => new Option(c.label, c.name)));
     if (record) {
       const values = mode === 'goal' ? { goalName: record.name, target: record.target / 100, daily: record.daily / 100, goalFrom: record.from, goalTo: record.to } : { kind: record.kind, frequency: record.frequency, weekday: record.weekday, time: record.time, scheduleType: record.bill?.type, scheduleAmount: record.bill?.amount, scheduleCategory: record.bill?.category, scheduleAccount: record.bill?.accountId ?? '', scheduleRemark: record.bill?.remark };
@@ -41,6 +46,7 @@ export function setupPlans({ refresh, showMessage, viewport }) {
   document.querySelector('#add-goal').onclick = () => open('goal');
   document.querySelector('#add-schedule').onclick = () => open('schedule');
   document.querySelector('#cancel-plan').onclick = () => dialog.close();
+  document.querySelector('#goal-add-account').onclick = () => { dialog.close(); addAccount(); };
   document.querySelector('#notification-permission').onclick = async () => {
     if (!native) return showMessage('网页仅在页面打开时处理到期计划；安卓安装版支持离线系统通知。');
     try { const result = await native.requestNotifications(); showMessage(result.granted ? '通知权限已开启。' : '通知未获授权，定时记录仍保留。'); } catch (e) { showMessage(e.message, true); }

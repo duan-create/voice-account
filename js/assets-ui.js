@@ -21,6 +21,7 @@ export function setupAssets({ showMessage, refresh, viewport }) {
     if (mode === 'category' && record) { field('categoryName', record.label); field('categoryType', record.type); field('icon', record.icon); field('color', record.color); field('aliases', record.aliases.join(',')); }
     if (mode === 'transfer') {
       for (const name of ['from', 'to']) form.elements.namedItem(name).replaceChildren(...accounts.filter(a => !a.archived).map(a => new Option(a.name, a.id)));
+      form.elements.namedItem('to').selectedIndex = accounts.filter(a => !a.archived).length > 1 ? 1 : 0;
     }
     dialog.showModal(); viewport();
   }
@@ -41,7 +42,7 @@ export function setupAssets({ showMessage, refresh, viewport }) {
         if (!editing && CATEGORIES.some(c => c.name === f.categoryName.trim())) throw new Error('分类已存在，请编辑现有分类。');
         await ledger.saveCategory({ name: editing?.name ?? f.categoryName, label: f.categoryName, type: f.categoryType, icon: f.icon, color: f.color, aliases: f.aliases });
       }
-      dialog.close(); await refresh(); showMessage('已保存。');
+      dialog.close(); await refresh(); showMessage(mode === 'transfer' ? '转账成功，两边账户余额已更新。' : '已保存。');
     } catch (e) { error.textContent = e.message; }
     finally { button.disabled = false; }
   };
@@ -58,6 +59,7 @@ export function setupAssets({ showMessage, refresh, viewport }) {
     return li;
   }
   return {
+    openAccount: () => open('account'),
     async update() {
       accounts = await ledger.accounts(); setCategories(await ledger.categories());
       const asset = accounts.reduce((sum, a) => sum + Math.max(0, a.balance), 0);

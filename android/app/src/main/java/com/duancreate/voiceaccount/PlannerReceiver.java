@@ -9,7 +9,10 @@ public class PlannerReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         PendingResult result = goAsync();
         new Thread(() -> {
-            try { LocalPlanner.tick(context.getApplicationContext()); }
+            try {
+                if (Intent.ACTION_TIME_CHANGED.equals(intent.getAction()) || Intent.ACTION_TIMEZONE_CHANGED.equals(intent.getAction())) LocalPlanner.resetClock(context.getApplicationContext());
+                else LocalPlanner.tick(context.getApplicationContext());
+            }
             catch (Exception error) { Log.e("LocalPlanner", "Scheduled records retained for retry", error); }
             finally { result.finish(); }
         }, "ledger-planner").start();

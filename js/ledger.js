@@ -108,7 +108,11 @@ export function createLedger(openDB) {
       });
     },
     archiveAccount(id) {
-      return transact(['accounts'], 'readwrite', async s => { const a = await account(s, id); return request(s.accounts.put({ ...a, archived: true })); });
+      return transact(['accounts', 'goals', 'schedules'], 'readwrite', async s => {
+        const a = await account(s, id), goals = await request(s.goals.getAll()), schedules = await request(s.schedules.getAll());
+        if (goals.some(g => !g.archived && [g.from, g.to].includes(a.id)) || schedules.some(p => p.enabled && Number(p.bill?.accountId) === a.id)) throw new Error('请先归档引用此账户的存钱目标，并停用对应定时计划。');
+        return request(s.accounts.put({ ...a, archived: true }));
+      });
     },
     journal: () => all('journal'),
     async bills() {

@@ -44,7 +44,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     field.className = "form-field";
     const label = document.createElement("label");
     label.htmlFor = `budget-category-${index}`;
-    label.textContent = `${category.name}预算（元）`;
+    label.textContent = `${category.label}预算（元）`;
     const input = document.createElement("input");
     Object.assign(input, { id: label.htmlFor, name: category.name, type: "number", inputMode: "decimal", min: "0.01", step: "0.01", placeholder: "未设置" });
     field.append(label, input);
@@ -68,10 +68,10 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
     const category = statistics.categories.find((item) => item.name === selected);
     const share = statistics.expense ? Math.round(category.amount / statistics.expense * 100) : 0;
     selection.style.setProperty("--category-color", category.color);
-    document.querySelector("#selection-name").textContent = `${category.icon} ${selected}`;
+    document.querySelector("#selection-name").textContent = `${category.icon} ${category.label}`;
     document.querySelector("#selection-amount").textContent = `¥${money.format(category.amount)}`;
     document.querySelector("#selection-percent").textContent = `${share}%`;
-    document.querySelector("#details-title").textContent = `${selected} · ${statistics.key} 支出`;
+    document.querySelector("#details-title").textContent = `${category.label} · ${statistics.key} 支出`;
     const list = document.querySelector("#detail-list");
     const rows = records.filter((bill) => bill.type === "支出" && monthKey(new Date(bill.date)) === statistics.key && categoryFor(bill.category).name === selected);
     list.replaceChildren(...rows.map((bill) => {
@@ -103,7 +103,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
       const row = document.createElement('li'); const label = document.createElement('span'); label.textContent = `${i + 1}. ${c.icon} ${c.label || c.name}`;
       const value = document.createElement('strong'); value.textContent = `¥${money.format(c.amount)}`; row.append(label, value); return row;
     }));
-    legend.replaceChildren(...statistics.categories.map((category) => {
+    legend.replaceChildren(...statistics.categories.filter(category => category.amount > 0).map((category) => {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.category = category.name;
@@ -113,7 +113,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
       dot.className = "category-dot";
       dot.style.background = category.color;
       const name = document.createElement("span");
-      name.textContent = category.name;
+      name.textContent = category.label;
       const percent = document.createElement("span");
       percent.className = "category-percent";
       percent.textContent = `${statistics.expense ? Math.round(category.amount / statistics.expense * 100) : 0}%`;
@@ -280,6 +280,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport }) {
   document.querySelector('#statistics-mode').onchange = event => { yearly = event.target.value === 'year'; statistics = selectedStatistics(); renderStatistics(); };
 
   return {
+    decorate: renderBudgets,
     setAvailable(value) {
       available = value;
       budgetButton.disabled = !value;

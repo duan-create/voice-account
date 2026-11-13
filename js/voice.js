@@ -1,5 +1,7 @@
 import { parseVoiceBill } from "./voice-parser.js";
 import { createNativeRecognition, isAndroidNative } from "./native-voice.js";
+import { enrichVoiceCategory } from './voice-category.js';
+import { CATEGORIES } from './finance.js';
 
 export function setupVoiceInput({ button, status, isAvailable, setActive, onDraft }) {
   const native = isAndroidNative();
@@ -54,7 +56,7 @@ export function setupVoiceInput({ button, status, isAvailable, setActive, onDraf
       return;
     }
     status.textContent = `已识别：${transcript}`;
-    onDraft(parseVoiceBill(transcript));
+    onDraft(enrichVoiceCategory(transcript, parseVoiceBill(transcript), CATEGORIES));
   }
 
   function start() {

@@ -76,7 +76,13 @@ export function setupPlans({ refresh, showMessage, viewport }) {
       document.querySelector('#schedule-list').replaceChildren(...(await ledger.all('schedules')).map(s => {
         const row = document.createElement('li'); row.className = 'manage-row'; const text = document.createElement('span');
         text.textContent = `${s.kind === 'bill' ? '自动记账' : '记账提醒'} · ${s.frequency === 'daily' ? '每天' : `每周${['日','一','二','三','四','五','六'][s.weekday]}`} ${s.time}${s.enabled ? '' : ' · 已停用'}`;
-        row.append(text, button('编辑', () => open('schedule', s)), button(s.enabled ? '停用' : '启用', async () => { await ledger.put('schedules', { ...s, enabled: !s.enabled, next: nextTime(s), revision: crypto.randomUUID() }); await sync(); await refresh(); })); return row;
+        row.append(text, button('编辑', () => open('schedule', s)), button(s.enabled ? '停用' : '启用', async () => {
+          try {
+            if (s.enabled) await ledger.put('schedules', { ...s, enabled: false, next: nextTime(s), revision: crypto.randomUUID() });
+            else await plans.saveSchedule(s);
+            await sync(); await refresh();
+          } catch (e) { showMessage(e.message, true); }
+        })); return row;
       }));
     }
   };

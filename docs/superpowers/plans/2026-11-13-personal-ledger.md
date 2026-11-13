@@ -27,44 +27,46 @@ Files: js/db.js, js/ledger.js, js/ledger-api.js, js/categories.js, js/assets-ui.
 
 Interfaces: createLedger(openDB) returns account/category CRUD, transfer, journal access and atomic bill operations. getBills preserves raw old records and joins account IDs only from independent metadata. category registry includes archived historical names. UI uses existing confirmation/Toast facilities.
 
-- [ ] Tests: seed v2 bills ID 17 and a budget, upgrade, assert exact old record and budget; opening 1000, expense 28.50 -> 971.50, edit 30 -> 970, delete -> 1000; move a bill between accounts; reject nonexistent accounts without bill/ledger writes; transfer 100 preserves net assets and bill count; archive preserves history.
-- [ ] Implement stores and operations; expose asset/category editors and account selection in the existing bill form. Run new tests plus npm test.
-- [ ] Update offline resource list and documentation. Commit `feat: add compatible account ledger and custom categories`.
+- [x] Tests: seed v2 bills ID 17 and a budget, upgrade, assert exact old record and budget; opening 1000, expense 28.50 -> 971.50, edit 30 -> 970, delete -> 1000; move a bill between accounts; reject nonexistent accounts without bill/ledger writes; transfer 100 preserves net assets and bill count; archive preserves history.
+- [x] Implement stores and operations; expose asset/category editors and account selection in the existing bill form. Run new tests plus npm test.
+- [x] Update offline resource list and documentation. Commit `feat: add compatible account ledger and custom categories`.
 
 ## Task 2: Calendar, Search And Statistics
 
 Files: js/calendar.js, js/calendar-ui.js, js/search-ui.js, js/finance.js, js/finance-ui.js, js/charts.js, js/app.js, index.html, css/style.css, tests/calendar.test.cjs, tests/system-ui.test.cjs.
 
-- [ ] Test February leap dates, month boundaries, income/expense cents, AND-combined search filters, inclusive date range and stable descending ordering.
-- [ ] Implement month calendar/day selection with red income/green expense, monthly balance, global search with saved queries, expense ranking and annual 12-month trends. Preserve voice form and current-month budgets.
-- [ ] Browser-check 320/375/desktop widths, calendar navigation and edit/delete from search. Commit `feat: add calendar ledger search and annual statistics`.
+- [x] Test February leap dates, month boundaries, income/expense cents, AND-combined search filters, inclusive date range and stable descending ordering.
+- [x] Implement month calendar/day selection with red income/green expense, monthly balance, global search with saved queries, expense ranking and annual 12-month trends. Preserve voice form and current-month budgets.
+- [x] Browser-check 320/375/desktop widths, calendar navigation and edit/delete from search. Commit `feat: add calendar ledger search and annual statistics`.
 
 ## Task 3: Import, Export And Restore
 
 Files: js/backup.js, js/backup-ui.js, scripts/prepare-web.cjs, package.json/lock, native DocumentsPlugin.java, index.html, tests/backup.test.cjs.
 
-- [ ] Test CSV escaping/newlines/BOM, invalid dates/money/account/category preview, legacy JSON and full versioned snapshot, invalid restore leaves database unchanged, restoration preserves IDs and account journal consistency.
-- [ ] Bundle PapaParse and ExcelJS locally. Export full-field CSV/XLSX; import CSV with preview, explicit new category/account mappings, atomic import; JSON snapshot/restore all stores in one transaction after validation/confirmation. Old bills-only JSON restores without assigning accounts.
-- [ ] Android ACTION_CREATE_DOCUMENT saves files chosen by user; browser retains normal downloads. Commit `feat: add csv excel export and complete local backup restore`.
+- [x] Test CSV escaping/newlines/BOM, invalid dates/money/account/category preview, legacy JSON and full versioned snapshot, invalid restore leaves database unchanged, restoration preserves IDs and account journal consistency.
+- [x] Bundle PapaParse and ExcelJS locally. Export full-field CSV/XLSX; import CSV with preview, explicit new category/account mappings, atomic import; JSON snapshot/restore all stores in one transaction after validation/confirmation. Old bills-only JSON restores without assigning accounts.
+- [x] Android ACTION_CREATE_DOCUMENT saves files chosen by user; browser retains normal downloads. Commit `feat: add csv excel export and complete local backup restore`.
 
 ## Task 4: Goals And Persistent Schedules
 
 Files: js/plans.js, js/plans-ui.js, native PlannerPlugin.java / PlannerReceiver.java / LocalPlanner.java, AndroidManifest.xml, MainActivity.java, tests/plans.test.cjs.
 
-- [ ] Test transfer-backed goal progress, no double count, insufficient/archived accounts, daily/weekly time advancement, duplicate occurrences and transaction failures.
-- [ ] Implement goals/check-ins and daily/weekly reminders/auto-bills. Native receiver commits outbox before notification; boot/time-change reschedules. JS imports occurrences atomically then acknowledges. PWA catches up only while open and states background limitation.
-- [ ] Commit `feat: add savings goals and persistent offline scheduled bills`.
+- [x] Test transfer-backed goal progress, no double count, insufficient/archived accounts, daily/weekly time advancement, duplicate occurrences and transaction failures.
+- [x] Implement goals/check-ins and daily/weekly reminders/auto-bills. Native receiver commits outbox before notification; boot/time-change reschedules. JS imports occurrences atomically then acknowledges. PWA catches up only while open and states background limitation.
+- [x] Commit `feat: add savings goals and persistent offline scheduled bills`.
 
 ## Task 5: Voice, Integration And Regression
 
 Files: js/voice-category.js, js/voice.js, whisper-jni.cpp, tests/voice-category.test.cjs, tests/system-ui.test.cjs, README.md, offline/build preparation.
 
-- [ ] Test custom alias uniqueness, preservation of original six rules and ambiguous amount safety; explicit states for recognition success/failure.
-- [ ] Keep bundled multilingual model and offline Android routing; use short accounting vocabulary as a decoding prompt without changing numeric parsing or auto-saving. Document accuracy limitations.
-- [ ] Run complete unit/browser regressions, resource sync/hash checks, Java/native configuration checks without claiming a device pass. Commit `feat: refine offline voice feedback and verify personal ledger workflows`.
+- [x] Test custom alias uniqueness, preservation of original six rules and ambiguous amount safety; explicit states for recognition success/failure.
+- [x] Keep bundled multilingual model and offline Android routing; use short accounting vocabulary as a decoding prompt without changing numeric parsing or auto-saving. Document accuracy limitations.
+- [x] Run complete unit/browser regressions, resource sync/hash checks, Java/native configuration checks without claiming a device pass. Commit `feat: refine offline voice feedback and verify personal ledger workflows`.
 
 ## Progress
 
-- Plan approved in chat. Implementation in progress; check task boxes and append actual verification/commit evidence as work completes.
+- Plan approved in chat; all five implementation modules are integrated. Native APK/device acceptance remains an explicitly separate follow-up verification.
 - Tasks 1-3 committed: `8921341`, `80733df`, `76b52d1`; unit regression at module 3: 104/104. Focused browser coverage includes accounts/calendar/search/CSV/Excel/JSON.
 - Task 4 implemented: 111/111 unit tests; focused browser scenarios 3/3 (account rollback workflow, backup/import, savings and schedule persistence), 320/375/1024 width checks. Android plugin source and manifest integrated; native compilation/device execution not verified because local SDK/NDK are absent.
+- Task 4 committed as `75dc497`.
+- Task 5: unit tests 114/114; full browser regression 53/53, final adapter focused regression 6/6; Java PCM and recurrence tests pass. Actionlint and cloud hook tests 3/3 pass. Whisper source/model verified; cap sync succeeds and 34 web resource hashes match. Original voice-parser.js unchanged. No APK build or device test performed.

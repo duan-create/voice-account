@@ -15,7 +15,7 @@ export function calendarMonth(bills, selected) {
 }
 export function searchBills(bills, filters) {
   const keyword = (filters.keyword || '').trim().toLocaleLowerCase();
-  return bills.filter(b => (!keyword || `${b.remark} ${b.category}`.toLocaleLowerCase().includes(keyword))
+  return bills.filter(b => (!keyword || `${b.remark} ${b.category} ${b.categoryLabel || ''}`.toLocaleLowerCase().includes(keyword))
     && (!filters.type || b.type === filters.type)
     && (filters.min === '' || filters.min == null || b.amount >= Number(filters.min))
     && (filters.max === '' || filters.max == null || b.amount <= Number(filters.max))

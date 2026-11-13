@@ -50,6 +50,16 @@ jobs:
           accept-android-sdk-licenses: true
           packages: ''
 
+      - name: Verify native recording and recurrence logic
+        run: |
+          mkdir -p .cache/java-tests
+          javac -d .cache/java-tests \
+            android/app/src/main/java/com/duancreate/voiceaccount/PcmCapture.java \
+            android/app/src/main/java/com/duancreate/voiceaccount/PlanClock.java \
+            tests/android/PcmCaptureTest.java tests/android/PlanClockTest.java
+          java -cp .cache/java-tests com.duancreate.voiceaccount.PcmCaptureTest
+          java -cp .cache/java-tests com.duancreate.voiceaccount.PlanClockTest
+
       - name: Install SDK, NDK and CMake
         run: |
           # AGP 8.13 also defaults to Build-Tools 35.0.0 in dependency modules.

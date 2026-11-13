@@ -64,7 +64,8 @@ export function setupAssets({ showMessage, refresh, viewport }) {
       const debt = accounts.reduce((sum, a) => sum + Math.max(0, -a.balance), 0);
       for (const [id, value] of [['total-assets', asset], ['total-debt', debt], ['net-assets', asset - debt]]) document.querySelector(`#${id}`).textContent = money.format(value);
       document.querySelector('#account-list').replaceChildren(...accounts.map(a => row(a.name, `${a.bank}${a.archived ? ' · 已归档' : ''}`, a.balance, a.archived ? null : () => open('account', a), a.archived ? null : async () => {
-        if (await requestDelete('归档后保留账户余额和历史流水，不再用于新记账。是否继续？', viewport)) { await ledger.archiveAccount(a.id); await refresh(); }
+        try { if (await requestDelete('归档后保留账户余额和历史流水，不再用于新记账。是否继续？', viewport)) { await ledger.archiveAccount(a.id); await refresh(); } }
+        catch (e) { showMessage(e.message, true); }
       })));
       document.querySelector('#account-empty').hidden = accounts.length > 0;
       document.querySelector('#category-list').replaceChildren(...CATEGORIES.map(c => row(`${c.icon} ${c.label}`, `${c.type}${c.archived ? ' · 已归档' : ''}`, null, () => open('category', c), c.name === '其他' || c.archived ? null : async () => {

@@ -83,3 +83,10 @@ test('category renaming preserves historical bill category and archived categori
   assert.equal((await bills.getBills())[0].category, '餐饮');
   assert.equal((await ledger.categories()).find(c => c.name === '餐饮').label, '吃喝');
 });
+test('accounts used by active goals or schedules cannot be archived underneath them', async () => {
+  const { ledger } = await setup();
+  const id = await ledger.saveAccount({ name: '计划账户', opening: 100 });
+  await ledger.put('schedules', { id: 'active', enabled: true, bill: { accountId: id } });
+  await assert.rejects(ledger.archiveAccount(id));
+  assert.equal((await ledger.accounts())[0].archived, false);
+});

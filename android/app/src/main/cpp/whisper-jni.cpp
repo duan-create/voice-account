@@ -96,6 +96,7 @@ Java_com_duancreate_voiceaccount_WhisperNative_recognize(
         params.language = "zh";
         params.translate = false;
         params.no_context = true;
+        params.initial_prompt = "这是中文个人记账。餐饮、交通、购物、住宿、娱乐、医疗、教育、工资、奖金、收入、支出、元、角、分。";
         params.no_timestamps = true;
         params.print_realtime = false;
         params.print_progress = false;

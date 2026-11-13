@@ -3,14 +3,14 @@ import { setupVoiceInput } from "./voice.js";
 import { isAndroidNative } from "./native-voice.js";
 import { categoryFor } from "./finance.js";
 import { setupFinanceUI } from "./finance-ui.js";
-import { animateAmount, stopAmountAnimation, requestDelete, fitAmount } from "./ui.js";
+import { stopAmountAnimation, requestDelete, fitAmount } from "./ui.js";
 import { ledger } from './ledger-api.js';
 import { setupAssets } from './assets-ui.js';
 import { setupCalendar } from './calendar-ui.js';
 import { setupBackup, saveFile } from './backup-ui.js';
 import { setupPlans } from './plans-ui.js';
 const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
-const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage });
+const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage, onDisplay: () => finance.decorate() });
 setupBackup({ refresh: refreshBills, showMessage, viewport: updateDialogViewport });
 const plans = setupPlans({ refresh: refreshBills, showMessage, viewport: updateDialogViewport });
 
@@ -138,20 +138,12 @@ function renderBills(records) {
 async function refreshBills() {
   try {
     await assets.update();
-    const [records, summary] = await Promise.all([ledger.bills(), getMonthSummary()]);
+    const [records] = await Promise.all([ledger.bills(), getMonthSummary()]);
     renderBills(records);
     bills = records;
-    stopAmountAnimation(incomeAmount);
-    stopAmountAnimation(expenseAmount);
-    incomeAmount.textContent = money.format(summary.income);
-    expenseAmount.textContent = money.format(summary.expense);
-    fitSummaryAmounts();
-    animateAmount(incomeAmount, summary.income);
-    animateAmount(expenseAmount, summary.expense);
     listState.textContent = records.length ? "" : "暂无账单";
     listState.hidden = records.length > 0;
     document.querySelector("#empty-bills").hidden = records.length > 0;
-    stopAmountAnimation(incomeAmount); stopAmountAnimation(expenseAmount);
     calendar.update(records);
     ready = true;
     await finance.update(records);

@@ -10,7 +10,6 @@ import android.os.Build;
 import androidx.core.app.NotificationCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import java.util.Calendar;
 
 /** Durable outbox: persist an occurrence and advance its cursor in the same preference commit. */
 final class LocalPlanner {
@@ -41,16 +40,7 @@ final class LocalPlanner {
         state.put("epoch", epoch).put("schedules", merged); save(context, state); tick(context);
     }
     static long next(JSONObject schedule, long after) throws Exception {
-        String[] time = schedule.getString("time").split(":");
-        Calendar date = Calendar.getInstance(); date.setTimeInMillis(after);
-        date.set(Calendar.HOUR_OF_DAY, Integer.parseInt(time[0])); date.set(Calendar.MINUTE, Integer.parseInt(time[1])); date.set(Calendar.SECOND, 0); date.set(Calendar.MILLISECOND, 0);
-        if (date.getTimeInMillis() <= after) date.add(Calendar.DATE, 1);
-        if (schedule.getString("frequency").equals("weekly")) {
-            int weekday = schedule.getInt("weekday");
-            if (weekday < 0 || weekday > 6) throw new IllegalArgumentException("Invalid weekday.");
-            while (date.get(Calendar.DAY_OF_WEEK) - 1 != weekday) date.add(Calendar.DATE, 1);
-        }
-        return date.getTimeInMillis();
+        return PlanClock.next(schedule.getString("time"), schedule.getString("frequency"), schedule.optInt("weekday", 0), after);
     }
     static synchronized void tick(Context context) throws Exception {
         JSONObject state = load(context);
@@ -78,6 +68,13 @@ final class LocalPlanner {
     }
     static synchronized JSONArray pending(Context context) throws Exception {
         tick(context); JSONArray result = load(context).optJSONArray("pending"); return result == null ? new JSONArray() : result;
+    }
+    static synchronized void resetClock(Context context) throws Exception {
+        tick(context);
+        JSONObject state = load(context); JSONArray schedules = state.optJSONArray("schedules");
+        if (schedules == null) return;
+        for (int i = 0; i < schedules.length(); i++) schedules.getJSONObject(i).put("next", next(schedules.getJSONObject(i), System.currentTimeMillis()));
+        save(context, state); tick(context);
     }
     static synchronized void acknowledge(Context context, String id) throws Exception {
         JSONObject state = load(context); JSONArray old = state.optJSONArray("pending"), remaining = new JSONArray();

@@ -107,7 +107,9 @@ test('calendar selects a day, search returns editable rows and annual chart fits
   assert.match(await page.locator('#bills-title').textContent(), /搜索结果/);
   await page.locator('.bill-action[data-action=edit]').click();
   assert.equal(await page.locator('#bill-amount').inputValue(), '18');
-  await page.locator('#cancel-bill').click();
+  await page.locator('#bill-amount').fill('19'); await save();
+  assert.match(await page.locator('#bills-title').textContent(), /搜索结果/);
+  assert.match(await page.locator('.bill-list').textContent(), /19\.00/);
   await page.locator('#statistics-tab').click();
   await page.locator('#statistics-mode').selectOption('year');
   assert.equal(await page.locator('#trend-data tr').count(), 12);
@@ -218,8 +220,7 @@ async function installSpeech({ prefixed = false, delayed = false, unsupported = 
 }
 
 async function holdVoice() {
-  const box = await page.locator(".voice-button").boundingBox();
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.locator('.voice-button').hover();
   await page.mouse.down();
 }
 
@@ -241,7 +242,7 @@ async function installNativeVoice({ denied = false, delayed = false } = {}) {
       cancelRecording: async (options) => { window.nativeCalls.push(['cancel', options]); }
     };
     window.nativeAutoStop = () => listeners.forEach((listener) => listener({sessionId: window.nativeCalls[0][1].sessionId}));
-    window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', registerPlugin: () => window.nativeVoice };
+    window.Capacitor = { isNativePlatform: () => true, getPlatform: () => 'android', registerPlugin: (name) => name === 'PlannerPlugin' ? { configure: async () => {}, pending: async () => ({items: []}), acknowledge: async () => {}, requestNotifications: async () => ({granted: true}) } : window.nativeVoice };
     window.SpeechRecognition = class { constructor() { throw new Error('Native must never use web recognition'); } };
   ` }));
   await page.reload();
@@ -260,7 +261,7 @@ test('Android voice remains available offline, fills the original form and saves
   await page.waitForFunction(() => typeof window.nativeResult === 'function');
   await page.evaluate(() => window.nativeResult('中午吃面花了二十八块'));
   await page.locator('#bill-dialog[open]').waitFor();
-  assert.equal(await page.getByLabel('金额（元）').inputValue(), '28');
+  assert.equal(await page.getByLabel('金额（元）', { exact: true }).inputValue(), '28');
   assert.equal(await page.getByLabel('分类', {exact: true}).inputValue(), '餐饮');
   assert.deepEqual(await readBills(), []);
   await save();
@@ -283,6 +284,23 @@ test('Android automatic silence and permission rejection restore manual entry wi
   await page.waitForFunction(() => document.querySelector('#voice-status').textContent.includes('权限'));
   assert.equal(await page.locator('.manual-button').isEnabled(), true);
   assert.deepEqual(await readBills(), []);
+});
+
+test('native schedule outbox is acknowledged only after a committed bill and retries idempotently', async () => {
+  await page.route('**/capacitor.js', route => route.fulfill({ contentType: 'text/javascript', body: `
+    const item = {id:'native-plan:123',kind:'bill',date:Date.now(),bill:{type:'支出',amount:8,category:'交通',remark:'原生定时',accountId:null}};
+    window.plannerAcks = [];
+    const planner = {configure:async()=>{},pending:async()=>({items:[item,item]}),acknowledge:async({id})=>{
+      const db=await (await import('./js/ledger-api.js')).ledger.bills();
+      if(db.length!==1) throw new Error('acknowledged before commit'); window.plannerAcks.push(id);
+    }};
+    window.Capacitor={isNativePlatform:()=>true,getPlatform:()=>'android',registerPlugin:()=>planner};
+  ` }));
+  await page.reload(); await waitForReady();
+  assert.equal((await readBills()).length, 1);
+  assert.deepEqual(await page.evaluate(() => window.plannerAcks), ['native-plan:123', 'native-plan:123']);
+  await page.reload(); await waitForReady();
+  assert.equal((await readBills()).length, 1);
 });
 
 test('Android release during permission startup and late result after cancel never double fill', async () => {
@@ -310,7 +328,7 @@ test('Android system permission focus change does not cancel a pending first rec
   await page.waitForFunction(() => typeof window.nativeResult === 'function');
   await page.evaluate(() => window.nativeResult('打车花了三十二元'));
   await page.locator('#bill-dialog[open]').waitFor();
-  assert.equal(await page.getByLabel('金额（元）').inputValue(), '32');
+  assert.equal(await page.getByLabel('金额（元）', { exact: true }).inputValue(), '32');
   assert.deepEqual(await readBills(), []);
 });
 
@@ -478,10 +496,11 @@ test("add, reload, edit and delete keep the list and monthly totals consistent",
   assert.equal((await readBills()).length, 1);
   await confirmDeletion(page.getByRole("button", { name: "删除", exact: true }));
   await page.waitForFunction(() => document.querySelectorAll(".bill-item").length === 0);
+  await waitForReady();
   assert.match(await page.locator("#app-message").innerText(), /已删除/);
   assert.deepEqual(await readBills(), []);
   assert.equal(await page.locator("#month-income").innerText(), "0.00");
-  assert.match(await page.locator("#list-state").innerText(), /暂无账单/);
+  assert.match(await page.locator("#list-state").innerText(), /暂无/);
 });
 
 test("invalid amounts and empty dates stay in the form and never write", async () => {
@@ -513,7 +532,8 @@ test("older months are excluded from totals, dates sort descending, and remarks 
   await openForm({ amount: "0.20", date: dates.today });
   await save();
   assert.equal(await page.locator("#month-expense").innerText(), "0.30");
-  assert.deepEqual(await page.locator(".bill-item time").evaluateAll((items) => items.map((item) => item.dateTime)), [dates.today, dates.today, dates.old]);
+  assert.deepEqual(await page.locator(".bill-item time").evaluateAll((items) => items.map((item) => item.dateTime)), [dates.today, dates.today]);
+  assert.deepEqual((await readBills()).map(b => b.date).sort((a, b) => b - a), [dates.today, dates.today, dates.old].map(d => new Date(`${d}T00:00:00+08:00`).getTime()));
   assert.equal(await page.locator(".bill-item img").count(), 0);
   assert.equal(await page.evaluate(() => window.injected), undefined);
   assert.match(await page.locator(".bill-list").innerText(), /<img src=x/);
@@ -721,6 +741,9 @@ test("date groups use local calendar days and disappear when their last bill is 
   await save();
   await openForm({ amount: "3", date: "2026-11-01" });
   await save();
+  assert.deepEqual(await page.locator('.bill-group-title').allTextContents(), ['今天']);
+  await page.locator('#open-search').click();
+  await page.locator('#search-form [type=submit]').click();
   assert.deepEqual(await page.locator(".bill-group-title").allTextContents(), ["今天", "昨天", "更早"]);
   assert.deepEqual(await page.locator(".bill-group").evaluateAll((groups) => groups.map((group) => [...group.querySelectorAll("time")].map((time) => time.dateTime))), [["2026-11-01"], ["2026-10-31"], ["2026-10-30"]]);
   await confirmDeletion(page.locator(".bill-group").first().getByRole("button", { name: "删除" }));
@@ -1119,7 +1142,8 @@ test("selected pie slice protrudes with working hit testing and trend has a fill
   const before = await sample();
   await page.locator('#category-legend button[data-category="餐饮"]').click();
   assert.notDeepEqual(await sample(), before);
-  assert.deepEqual((await sample()).slice(0, 3), [196, 92, 56]);
+  const selectedPixel = await sample();
+  assert.ok(selectedPixel[0] > selectedPixel[1] && selectedPixel[1] > selectedPixel[2] && selectedPixel[3] > 150, 'selected warm category gradient must be painted');
   const bounds = await page.locator("#category-chart").boundingBox();
   await page.mouse.click(bounds.x + bounds.width * 0.91, bounds.y + bounds.height * 0.5);
   assert.equal(await page.locator('#category-legend button[data-category="餐饮"]').getAttribute("aria-pressed"), "true");
@@ -1188,7 +1212,7 @@ test("a single-category pie has no artificial radial divider through its center"
   await page.getByRole("tab", { name: "统计", exact: true }).click();
   const pixel = await page.locator("#category-chart").evaluate((canvas) =>
     [...canvas.getContext("2d").getImageData(Math.round(canvas.width / 2), Math.round(canvas.height * 0.25), 1, 1).data]);
-  assert.deepEqual(pixel, [196, 92, 56, 255]);
+  assert.ok(pixel[0] > pixel[1] && pixel[1] > pixel[2] && pixel[3] > 150, 'single slice must be filled across the former radial divider');
 });
 
 test("bill signs and large amounts remain together on narrow screens", async () => {

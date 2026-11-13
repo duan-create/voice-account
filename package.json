@@ -5,11 +5,12 @@
   "type": "module",
   "description": "Voice accounting PWA with a Capacitor Android shell",
   "scripts": {
+    "dev": "node scripts/serve.cjs",
     "prepare": "node scripts/prepare-web.cjs",
     "prepare:web": "node scripts/prepare-web.cjs",
     "capacitor:copy:before": "node scripts/prepare-web.cjs",
     "sync:android": "cap sync android",
-    "test": "node --test tests/voice-parser.test.cjs tests/prepare-web.test.cjs tests/finance.test.cjs tests/native-voice.test.cjs tests/ledger.test.cjs tests/calendar.test.cjs tests/backup.test.cjs tests/plans.test.cjs"
+    "test": "node --test tests/voice-parser.test.cjs tests/voice-category.test.cjs tests/prepare-web.test.cjs tests/finance.test.cjs tests/native-voice.test.cjs tests/ledger.test.cjs tests/calendar.test.cjs tests/backup.test.cjs tests/plans.test.cjs"
   },
   "dependencies": {
     "@capacitor/android": "8.6.0",

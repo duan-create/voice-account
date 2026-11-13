@@ -1,14 +1,15 @@
 :root {
-  --color-text: #23334c;
-  --color-muted: #738096;
-  --color-primary: #4878c9;
-  --color-income: #0f766e;
-  --color-expense: #bd5860;
-  --color-border: #e0e8f2;
-  --color-surface: #ffffff;
+  --color-text: #263347;
+  --color-muted: #748093;
+  --color-primary: #165dff;
+  --color-income: #a56070;
+  --color-expense: #427f71;
+  --color-border: #e2e7f0;
+  --color-surface: rgb(255 255 255 / 86%);
   --color-danger: #b63838;
-  --shadow-card: 0 4px 16px rgb(39 63 101 / 5%), 0 1px 2px rgb(39 63 101 / 3%);
+  --shadow-card: 0 3px 16px rgb(31 55 91 / 4%);
   --radius: 8px;
+  --motion: 240ms;
 }
 
 *,
@@ -33,7 +34,7 @@ body {
   line-height: 1.5;
   letter-spacing: 0;
   color: var(--color-text);
-  background: linear-gradient(165deg, #edf4ff 0, #f5f8fc 22rem, #f8fafc 45rem);
+  background: linear-gradient(175deg, #edf2fc 0, #f5f7fa 22rem, #f7f8fa 45rem);
 }
 
 button,
@@ -79,6 +80,7 @@ svg {
 }
 
 .app-header h1 {
+  flex: 1;
   font-size: 1.375rem;
   font-weight: 700;
 }
@@ -105,24 +107,24 @@ svg {
 .summary-card {
   min-width: 0;
   padding: 1rem 0.875rem 1.125rem;
-  border: 1px solid #d9eae4;
+  border: 1px solid #eadddf;
   border-radius: var(--radius);
-  background: linear-gradient(145deg, #e4f4ec, #f6fcf9);
+  background: linear-gradient(145deg, #f6e9edb8, #ffffffde);
   box-shadow: var(--shadow-card);
 }
 
-.summary-expense { border-color: #f0dfe0; background: linear-gradient(145deg, #fbe9e9, #fff8f7); }
-.summary-income .summary-amount, .summary-income .currency { color: #267665; }
-.summary-expense .summary-amount, .summary-expense .currency { color: #ae525c; }
+.summary-expense { border-color: #dce9e4; background: linear-gradient(145deg, #e6f1edb8, #ffffffde); }
+.summary-income .summary-amount, .summary-income .currency { color: #a56070; }
+.summary-expense .summary-amount, .summary-expense .currency { color: #427f71; }
 
 .summary-card dt {
   display: flex;
   align-items: center;
   gap: 0.375rem;
   font-size: 0.75rem;
-  color: #657c75;
+  color: #8e737d;
 }
-.summary-expense dt { color: #967477; }
+.summary-expense dt { color: #648178; }
 .summary-card dt svg { padding: 2px; width: 22px; height: 22px; border-radius: 50%; background: rgb(255 255 255 / 65%); }
 
 .summary-card dd {
@@ -163,12 +165,12 @@ svg {
   justify-content: center;
   gap: 0.875rem;
   width: 100%;
-  min-height: 6.75rem;
+  min-height: 5.5rem;
   padding: 1.25rem;
-  border: 1px solid #638ed4;
+  border: 1px solid #316bdf;
   border-radius: var(--radius);
-  background: linear-gradient(170deg, #729de0, #4b7ac7 65%, #4270ba);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 40%), inset 0 -2px 0 rgb(36 71 134 / 18%), 0 5px 0 #355f9e, 0 12px 20px rgb(61 104 176 / 18%);
+  background: linear-gradient(115deg, #3475f5, #165dff);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 20%), 0 4px 12px rgb(22 93 255 / 13%);
   color: #ffffff;
   font-size: 1.125rem;
   font-weight: 600;
@@ -179,15 +181,11 @@ svg {
 }
 
 .voice-button[data-state="recording"] {
-  background: linear-gradient(170deg, #507cc5, #3d67ac);
-  box-shadow: inset 0 3px 7px rgb(25 54 102 / 24%), 0 1px 0 #315b98;
-  transform: translateY(3px);
+  background: linear-gradient(115deg, #2454ba, #1649b9);
+  box-shadow: inset 0 2px 4px rgb(14 47 107 / 15%);
+  transform: scale(0.985);
 }
-.voice-button:not(:disabled):active { transform: translateY(3px); box-shadow: inset 0 3px 7px rgb(25 54 102 / 24%), 0 1px 0 #315b98; }
-.voice-button::before, .voice-button::after { content: ""; position: absolute; inset: -1px; pointer-events: none; border: 1px solid #709be0; border-radius: inherit; opacity: 0; }
-.voice-button[data-state="recording"]::before, .voice-button[data-state="recording"]::after { animation: recording-ripple 1.8s ease-out infinite; }
-.voice-button[data-state="recording"]::after { animation-delay: 0.9s; }
-.voice-button > svg { filter: drop-shadow(0 1px 1px rgb(24 56 110 / 20%)); }
+.voice-button:not(:disabled):active { transform: scale(0.985); box-shadow: inset 0 2px 4px rgb(14 47 107 / 15%); }
 
 .voice-button[data-state="starting"],
 .voice-button[data-state="processing"] {
@@ -210,7 +208,7 @@ svg {
 
 .voice-wave i { width: 3px; height: 6px; border-radius: 2px; background: #ffffff; }
 .voice-button[data-state="recording"] .voice-wave { opacity: 1; }
-.voice-button[data-state="recording"] .voice-wave i { animation: waveform 650ms ease-in-out infinite alternate; }
+.voice-button[data-state="recording"] .voice-wave i { animation: waveform 280ms ease-in-out infinite alternate; }
 .voice-wave i:nth-child(2), .voice-wave i:nth-child(4) { animation-delay: -200ms !important; }
 .voice-wave i:nth-child(3) { animation-delay: -400ms !important; }
 
@@ -282,7 +280,7 @@ svg {
   border-radius: var(--radius);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
-  animation: bill-enter 300ms ease-out both;
+  animation: bill-enter var(--motion) ease-out both;
   animation-delay: var(--entry-delay, 0ms);
 }
 
@@ -344,7 +342,7 @@ button:not(:disabled) {
 }
 
 button {
-  transition: transform 120ms ease, background-color 150ms ease, box-shadow 150ms ease;
+  transition: transform var(--motion) ease, background-color var(--motion) ease, box-shadow var(--motion) ease;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -378,7 +376,7 @@ button:disabled {
   box-shadow: 0 6px 26px rgb(26 49 80 / 14%);
   opacity: 0;
   transform: translate(-50%, 8px);
-  transition: opacity 180ms ease, transform 180ms ease;
+  transition: opacity var(--motion) ease, transform var(--motion) ease;
   pointer-events: none;
 }
 
@@ -470,7 +468,7 @@ dialog {
   background: var(--color-surface);
   box-shadow: 0 20px 70px rgb(26 49 80 / 20%);
   opacity: 0;
-  transition: opacity 180ms ease, transform 180ms ease, display 180ms allow-discrete, overlay 180ms allow-discrete;
+  transition: opacity var(--motion) ease, transform var(--motion) ease, display var(--motion) allow-discrete, overlay var(--motion) allow-discrete;
 }
 
 dialog[open] { opacity: 1; }
@@ -484,7 +482,7 @@ dialog:not([open]) { transform: translateY(calc(-50% + 20px)); }
 
 dialog::backdrop {
   background: rgb(15 23 42 / 40%);
-  transition: background 180ms ease, display 180ms allow-discrete, overlay 180ms allow-discrete;
+  transition: background var(--motion) ease, display var(--motion) allow-discrete, overlay var(--motion) allow-discrete;
 }
 
 body:has(dialog[open]) {
@@ -567,8 +565,8 @@ body:has(dialog[open]) {
 .budget-balance strong { color: var(--color-text); font-size: 1.375rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
 progress { display: block; width: 100%; height: 8px; margin: 0.75rem 0 0.625rem; appearance: none; border: 0; border-radius: 4px; background: #e3eaf4; accent-color: var(--color-primary); overflow: hidden; box-shadow: inset 0 1px 2px rgb(49 78 120 / 6%); }
 progress::-webkit-progress-bar { background: #e3eaf4; }
-progress::-webkit-progress-value { background: linear-gradient(90deg, #83b2f3, #4778c9); border-radius: 4px; transition: width 400ms ease; }
-progress::-moz-progress-bar { background: linear-gradient(90deg, #83b2f3, #4778c9); }
+progress::-webkit-progress-value { background: linear-gradient(90deg, #7ba3f7, #165dff); border-radius: 4px; transition: width var(--motion) ease; }
+progress::-moz-progress-bar { background: linear-gradient(90deg, #7ba3f7, #165dff); }
 .budget-caption { font-size: 0.75rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 #category-budgets { display: grid; gap: 0.5rem; margin-top: 0.75rem; }
 #category-budgets:empty { display: none; }
@@ -609,8 +607,8 @@ progress::-moz-progress-bar { background: linear-gradient(90deg, #83b2f3, #4778c
 #category-legend strong { font-size: 0.8125rem; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .trend-legend { display: flex; justify-content: flex-end; gap: 1rem; font-size: 0.75rem; color: var(--color-muted); }
 .trend-legend span { display: flex; align-items: center; gap: 0.375rem; }
-.income-dot { background: #238779; }
-.expense-dot { background: #527dc9; }
+.income-dot { background: #a76e7c; }
+.expense-dot { background: #578e85; }
 #trend-chart { display: block; width: 100%; height: 220px; margin-top: 0.5rem; }
 .trend-table { font-size: 0.8125rem; color: var(--color-muted); }
 .disclosure-button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 0.875rem 0; border: 0; background: transparent; color: var(--color-primary); font-size: 0.8125rem; }
@@ -627,7 +625,6 @@ progress::-moz-progress-bar { background: linear-gradient(90deg, #83b2f3, #4778c
 #detail-list time { color: var(--color-muted); font-size: 0.75rem; }
 #detail-list strong { text-align: right; font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; }
 
-@keyframes recording-ripple { from { transform: scale(1); opacity: 0.65; } to { transform: scale(1.06, 1.25); opacity: 0; } }
 @keyframes waveform { from { transform: scaleY(0.7); } to { transform: scaleY(2.7); } }
 @keyframes bill-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
@@ -701,6 +698,10 @@ progress::-moz-progress-bar { background: linear-gradient(90deg, #83b2f3, #4778c
 .form-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .stats-mode { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8125rem; padding-bottom: 1rem; }
 .stats-mode select { padding: 0.5rem; border: 1px solid var(--color-border); border-radius: 6px; background: white; }
+.summary-card, .bill-item, .bottom-nav, dialog { backdrop-filter: blur(8px); }
+.bottom-nav { background: rgb(255 255 255 / 90%); }
+.full-screen-view:not([hidden]) .screen-content { animation: bill-enter var(--motion) ease-out; }
+input:focus, select:focus, textarea:focus { border-color: #7ca4fa; outline-color: #b7ccfc; }
 .full-screen-view { position: fixed; inset: 0; z-index: 6; background: #f5f7fb; overflow-y: auto; overscroll-behavior: contain; padding: calc(1rem + env(safe-area-inset-top, 0px)) 1.25rem calc(2rem + env(safe-area-inset-bottom, 0px)); }
 .screen-content { width: 100%; max-width: 40rem; margin: auto; }
 body:has(.full-screen-view:not([hidden])) { overflow: hidden; }

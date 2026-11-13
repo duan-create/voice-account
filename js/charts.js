@@ -46,7 +46,8 @@ export function setupCharts(pie, trend, onSelect) {
         ctx.arc(cx, cy, radius, start, end);
         ctx.closePath();
         const fill = ctx.createLinearGradient(cx - radius, cy - radius, cx + radius, cy + radius);
-        fill.addColorStop(0, category.color); fill.addColorStop(1, `${category.color}b5`);
+        const color = category.chartColor || category.color;
+        fill.addColorStop(0, color); fill.addColorStop(1, `${color}b5`);
         ctx.fillStyle = fill;
         ctx.fill();
         ctx.shadowColor = "transparent";

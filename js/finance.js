@@ -5,6 +5,7 @@ export function setCategories(categories) { CATEGORIES.splice(0, CATEGORIES.leng
 export const money = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 export const categoryFor = (name) => CATEGORIES.find((item) => item.name === name) ?? CATEGORIES.find(c => c.name === '其他');
+const CHART_COLORS = ['#6586ba', '#579d9e', '#a69c76', '#8294a9', '#a8839b', '#6f9d81', '#a67f77', '#7a86ad', '#8fa3b6'];
 
 export function calculateStatistics(bills, now = new Date(), yearly = false) {
   const key = yearly ? String(now.getFullYear()) : monthKey(now);
@@ -28,6 +29,7 @@ export function calculateStatistics(bills, now = new Date(), yearly = false) {
   const expense = categories.reduce((s, c) => s + c.amount, 0) / 100;
   const income = incomeCategories.reduce((s, c) => s + c.amount, 0) / 100;
   for (const item of [...categories, ...incomeCategories]) item.amount /= 100;
+  categories.filter(c => c.amount > 0).forEach((c, i) => { c.chartColor = CHART_COLORS[i % CHART_COLORS.length]; });
   for (const item of months) {
     item.income /= 100;
     item.expense /= 100;

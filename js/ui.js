@@ -35,7 +35,7 @@ export function animateAmount(element, value) {
     };
     amounts.set(element, finish);
     function tick(now) {
-      const progress = Math.min(1, (now - start) / 550);
+      const progress = Math.min(1, (now - start) / 240);
       element.textContent = money.format(value * (1 - (1 - progress) ** 3));
       if (progress < 1) frame = requestAnimationFrame(tick);
       else { element.textContent = money.format(value); finish(); }

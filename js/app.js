@@ -10,6 +10,8 @@ import { setupCalendar } from './calendar-ui.js';
 import { setupBackup, saveFile } from './backup-ui.js';
 import { setupPlans } from './plans-ui.js';
 import { setupSearch } from './search-ui.js';
+import { categoryIcon } from './icons.js';
+import { DEFAULT_CATEGORIES } from './categories.js';
 const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
 const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage, onDisplay: () => finance.decorate() });
 const backup = setupBackup({ refresh: refreshBills, showMessage, viewport: updateDialogViewport, setBusy });
@@ -105,7 +107,8 @@ function renderBills(records) {
     item.style.setProperty("--entry-delay", `${Math.min(index, 8) * 35}ms`);
     const category = categoryFor(bill.category);
     const icon = item.querySelector(".bill-icon");
-    icon.textContent = category.icon;
+    if (DEFAULT_CATEGORIES.some(c => c.name === category.name && c.icon === category.icon)) icon.replaceChildren(categoryIcon(category.name));
+    else icon.textContent = category.icon;
     icon.style.color = category.color;
     icon.style.background = category.background;
     item.querySelector(".bill-category").textContent = category.label;

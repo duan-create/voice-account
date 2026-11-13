@@ -68,8 +68,8 @@ export function setupFinanceUI({ showMessage, updateDialogViewport, openSearch }
     const category = statistics.categories.find((item) => item.name === selected);
     if (!category) { selected = null; details.hidden = true; selection.hidden = true; return; }
     const share = statistics.expense ? Math.round(category.amount / statistics.expense * 100) : 0;
-    selection.style.setProperty("--category-color", category.color);
-    document.querySelector("#selection-name").textContent = `${category.icon} ${category.label}`;
+    selection.style.setProperty("--category-color", category.chartColor || category.color);
+    document.querySelector("#selection-name").textContent = category.label;
     document.querySelector("#selection-amount").textContent = `¥${money.format(category.amount)}`;
     document.querySelector("#selection-percent").textContent = `${share}%`;
     document.querySelector("#details-title").textContent = `${category.label} · ${statistics.key} 支出`;
@@ -115,7 +115,7 @@ export function setupFinanceUI({ showMessage, updateDialogViewport, openSearch }
       button.setAttribute("aria-pressed", String(selected === category.name));
       const dot = document.createElement("i");
       dot.className = "category-dot";
-      dot.style.background = category.color;
+      dot.style.background = category.chartColor || category.color;
       const name = document.createElement("span");
       name.textContent = category.label;
       const percent = document.createElement("span");

@@ -194,6 +194,21 @@ test('automatic backup history restores a selected copy and retains the pre-rest
   assert.equal(copies.every(c => !Object.hasOwn(c.stores, 'copies')), true);
 });
 
+test('all refined views fit 320px and reduced motion removes recording decoration', async () => {
+  await waitForReady(); await page.setViewportSize({ width: 320, height: 640 });
+  for (const tab of ['home', 'statistics', 'assets', 'plans']) {
+    await page.locator(`#${tab}-tab`).click();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({ path: join(root, `.cache/refinement-${tab}-320.png`), fullPage: true });
+  }
+  await page.locator('#open-search').click(); await page.locator('#search-view').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#search-view').evaluate(e => e.scrollWidth <= e.clientWidth), true);
+  await page.locator('#cancel-search').click(); await page.locator('#open-settings').click();
+  assert.equal(await page.locator('#settings-view').evaluate(e => e.scrollWidth <= e.clientWidth), true);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  assert.equal(await page.locator('.voice-button').evaluate(e => getComputedStyle(e).transitionDuration), '0s');
+});
+
 test('complete backup and CSV/Excel exports work offline and CSV import previews before writing', async () => {
   await openForm({ remark: '导出,"备注"', amount: '12.50' }); await save();
   for (const extension of ['json', 'csv', 'xlsx']) {
@@ -1220,7 +1235,7 @@ test("selected pie slice protrudes with working hit testing and trend has a fill
   await page.locator('#category-legend button[data-category="餐饮"]').click();
   assert.notDeepEqual(await sample(), before);
   const selectedPixel = await sample();
-  assert.ok(selectedPixel[0] > selectedPixel[1] && selectedPixel[1] > selectedPixel[2] && selectedPixel[3] > 150, 'selected warm category gradient must be painted');
+  assert.ok(selectedPixel[2] > selectedPixel[0] && selectedPixel[3] > 150, 'selected blue category gradient must be painted');
   const bounds = await page.locator("#category-chart").boundingBox();
   await page.mouse.click(bounds.x + bounds.width * 0.91, bounds.y + bounds.height * 0.5);
   assert.equal(await page.locator('#category-legend button[data-category="餐饮"]').getAttribute("aria-pressed"), "true");
@@ -1289,7 +1304,7 @@ test("a single-category pie has no artificial radial divider through its center"
   await page.getByRole("tab", { name: "统计", exact: true }).click();
   const pixel = await page.locator("#category-chart").evaluate((canvas) =>
     [...canvas.getContext("2d").getImageData(Math.round(canvas.width / 2), Math.round(canvas.height * 0.25), 1, 1).data]);
-  assert.ok(pixel[0] > pixel[1] && pixel[1] > pixel[2] && pixel[3] > 150, 'single slice must be filled across the former radial divider');
+  assert.ok(pixel[2] > pixel[0] && pixel[3] > 150, 'single slice must be filled across the former radial divider');
 });
 
 test("bill signs and large amounts remain together on narrow screens", async () => {

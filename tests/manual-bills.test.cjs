@@ -198,6 +198,7 @@ test('savings has an add-account route after all accounts are intentionally arch
   await waitForReady();
   await page.evaluate(async () => { const { ledger } = await import('./js/ledger-api.js'); for (const a of await ledger.accounts()) await ledger.archiveAccount(a.id); });
   await page.reload(); await waitForReady(); await page.locator('#plans-tab').click(); await page.locator('#add-goal').click();
+  await page.locator('#plan-dialog[open]').waitFor();
   assert.equal(await page.locator('#goal-account-help').isVisible(), true);
   assert.equal(await page.locator('#plan-form [type=submit]').isDisabled(), true);
   await page.locator('#goal-add-account').click(); await page.locator('#asset-dialog[open]').waitFor();
@@ -349,6 +350,142 @@ async function installNativeVoice({ denied = false, delayed = false } = {}) {
   await page.reload();
   await waitForReady();
 }
+
+async function installSpeechVault() {
+  await installNativeVoice();
+  await page.evaluate(() => {
+    const original = window.Capacitor.registerPlugin;
+    let key;
+    const vault = {
+      async seal({ json }) {
+        key ??= await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const bytes = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(json));
+        return { sealed: btoa(String.fromCharCode(...iv)) + '.' + btoa(String.fromCharCode(...new Uint8Array(bytes))) };
+      },
+      async unseal({ sealed }) {
+        const [iv, bytes] = sealed.split('.').map(s => Uint8Array.from(atob(s), c => c.charCodeAt(0)));
+        return { json: new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, bytes)) };
+      },
+      async clearKey() { key = null; }
+    };
+    window.Capacitor.registerPlugin = name => name === 'SpeechVaultPlugin' ? vault : original(name);
+  });
+  // Settings accesses the registered vault lazily, matching a live native bridge.
+}
+
+test('PWA keeps browser recognition and does not offer cloud credentials', async () => {
+  await waitForReady(); await page.locator('#open-settings').click();
+  assert.match(await page.locator('#speech-platform-note').textContent(), /安卓/);
+  assert.equal(await page.locator('#speech-form').isVisible(), false);
+});
+
+test('Android speech opt-in requires consent, seals credentials outside backups and clears them', async () => {
+  await installSpeechVault(); await page.locator('#open-settings').click();
+  await page.locator('#speech-form').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#speech-mode').inputValue(), 'offline');
+  await page.locator('#speech-mode').selectOption('cloud');
+  for (const [id, value] of [['app-id', 'private-app'], ['api-key', 'private-key'], ['api-secret', 'private-secret']]) await page.locator(`#speech-${id}`).fill(value);
+  await page.locator('#speech-save').click();
+  assert.equal(await page.locator('#speech-consent').evaluate(input => input.validity.valueMissing), true);
+  await page.locator('#speech-consent').check(); await page.locator('#speech-save').click();
+  await page.waitForFunction(() => document.querySelector('#speech-settings-status').textContent.includes('已保存'));
+  assert.equal(await page.locator('#speech-api-secret').inputValue(), '');
+  const state = await page.evaluate(async () => {
+    const snapshot = await (await import('./js/backup.js')).snapshot((await import('./js/ledger-api.js')).ledger);
+    const r = indexedDB.open('voice-account-speech');
+    const db = await new Promise(resolve => { r.onsuccess = () => resolve(r.result); });
+    const raw = await new Promise(resolve => { const q = db.transaction('vault').objectStore('vault').get('config'); q.onsuccess = () => resolve(q.result); });
+    return { snapshot: JSON.stringify(snapshot), raw: JSON.stringify(raw) };
+  });
+  for (const value of Object.values(state)) for (const secret of ['private-app', 'private-key', 'private-secret']) assert.ok(!value.includes(secret));
+  for (const width of [320, 375, 1024]) {
+    await page.setViewportSize({ width, height: 700 });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.querySelector('#settings-view').scrollWidth <= innerWidth), true);
+    await page.screenshot({ path: join(root, `.cache/speech-settings-${width}.png`), fullPage: true });
+  }
+  await page.locator('#speech-clear').click();
+  await page.waitForFunction(() => document.querySelector('#speech-settings-status').textContent.includes('已清除'));
+  assert.equal(await page.locator('#speech-mode').inputValue(), 'offline');
+});
+
+async function configureCloud() {
+  await installSpeechVault(); await page.locator('#open-settings').click();
+  await page.locator('#speech-mode').selectOption('cloud');
+  for (const [id, value] of [['app-id', 'private-app'], ['api-key', 'private-key'], ['api-secret', 'private-secret']]) await page.locator(`#speech-${id}`).fill(value);
+  await page.locator('#speech-consent').check(); await page.locator('#speech-save').click();
+  await page.waitForFunction(() => document.querySelector('#speech-settings-status').textContent.includes('已保存'));
+}
+
+async function installCloudSocket(failure = false) {
+  await page.evaluate(failure => {
+    window.cloudFrames = [];
+    const listeners = new Set();
+    const plugin = {
+      async addListener(_event, listener) { listeners.add(listener); return { remove: async () => listeners.delete(listener) }; },
+      async connect({ sessionId }) { listeners.forEach(l => l({ sessionId, type: 'open' })); },
+      async send({ sessionId, text }) {
+        const frame = JSON.parse(text); window.cloudFrames.push(frame);
+        let result;
+        if (failure) result = { code: 10105, message: 'authorization failed' };
+        else if (frame.data.status === 2) result = { code: 0, data: { status: 2, result: { sn: 0, ws: [{ cw: [{ w: '午餐28元' }] }] } } };
+        if (result) listeners.forEach(l => l({ sessionId, type: 'message', data: JSON.stringify(result) }));
+      },
+      async close() {}
+    };
+    const original = window.Capacitor.registerPlugin;
+    window.Capacitor.registerPlugin = name => name === 'CloudSpeechPlugin' ? plugin : original(name);
+    window.nativeVoice.stopRecordingForCloud = async options => {
+      window.nativeCalls.push(['pcm', options]); return { pcm: 'AAABAA==' };
+    };
+  }, failure);
+}
+
+test('Android cloud result uses original confirmation form and never saves without consent', async () => {
+  await configureCloud(); await installCloudSocket(); await page.locator('#close-settings').click();
+  await holdVoice(); await page.waitForFunction(() => document.querySelector('.voice-button').dataset.state === 'recording');
+  await page.mouse.up(); await page.locator('#bill-dialog[open]').waitFor();
+  assert.equal(await page.locator('#bill-amount').inputValue(), '28');
+  assert.deepEqual(await readBills(), []);
+  assert.deepEqual(await page.evaluate(() => window.nativeCalls.map(c => c[0])), ['start', 'pcm', 'cancel']);
+  await save(); assert.equal((await readBills()).length, 1);
+});
+
+test('Android cloud authorization failure reuses same recording offline and preserves manual flow', async () => {
+  await configureCloud(); await installCloudSocket(true); await page.locator('#close-settings').click();
+  await holdVoice(); await page.waitForFunction(() => document.querySelector('.voice-button').dataset.state === 'recording');
+  await page.mouse.up(); await page.waitForFunction(() => typeof window.nativeResult === 'function');
+  assert.match(await page.locator('#app-message').textContent(), /无需重新录音/);
+  assert.equal(await page.locator('.voice-button').getAttribute('data-state'), 'processing');
+  await page.evaluate(() => window.nativeResult('奶茶12元')); await page.locator('#bill-dialog[open]').waitFor();
+  assert.equal(await page.locator('#bill-amount').inputValue(), '12');
+  const sessions = await page.evaluate(() => window.nativeCalls.map(c => c[1].sessionId));
+  assert.equal(new Set(sessions).size, 1); assert.deepEqual(await readBills(), []);
+});
+
+test('connection test uses synthetic silence and reports authorization failure without changing stored mode', async () => {
+  await configureCloud(); await installCloudSocket(true);
+  await page.locator('#speech-consent').check(); await page.locator('#speech-test').click();
+  await page.waitForFunction(() => document.querySelector('#speech-settings-status').textContent.includes('连接测试失败'));
+  assert.deepEqual(await page.evaluate(() => window.nativeCalls), []);
+  const bytes = await page.evaluate(() => [...atob(window.cloudFrames[0].data.audio)].map(c => c.charCodeAt(0)));
+  assert.ok(bytes.length > 0 && bytes.every(v => v === 0));
+  assert.equal(await page.locator('#speech-mode').inputValue(), 'cloud');
+});
+
+test('closing settings during credential decryption prevents a delayed connection test from uploading', async () => {
+  await configureCloud(); await installCloudSocket();
+  await page.evaluate(() => {
+    const register = window.Capacitor.registerPlugin, vault = register('SpeechVaultPlugin');
+    const unseal = vault.unseal.bind(vault);
+    vault.unseal = options => new Promise(resolve => { window.releaseSpeechVault = async () => resolve(await unseal(options)); });
+  });
+  await page.locator('#speech-consent').check(); await page.locator('#speech-test').click();
+  await page.waitForFunction(() => typeof window.releaseSpeechVault === 'function');
+  await page.locator('#close-settings').click(); await page.evaluate(() => window.releaseSpeechVault());
+  await page.waitForFunction(() => !document.querySelector('#speech-form').hasAttribute('aria-busy'));
+  assert.deepEqual(await page.evaluate(() => window.cloudFrames), []);
+});
 
 test('Android voice remains available offline, fills the original form and saves only after confirmation', async () => {
   await installNativeVoice();

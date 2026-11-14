@@ -12,6 +12,8 @@ import { setupPlans } from './plans-ui.js';
 import { setupSearch } from './search-ui.js';
 import { categoryIcon } from './icons.js';
 import { DEFAULT_CATEGORIES } from './categories.js';
+import { setupSpeechSettings } from './speech-settings.js';
+const speechSettings = setupSpeechSettings({ showMessage });
 const assets = setupAssets({ showMessage, refresh: refreshBills, viewport: updateDialogViewport });
 const calendar = setupCalendar({ render: renderBills, viewport: updateDialogViewport, showMessage, onDisplay: () => finance.decorate() });
 const backup = setupBackup({ refresh: refreshBills, showMessage, viewport: updateDialogViewport, setBusy });
@@ -192,6 +194,7 @@ function openForm(bill = null) {
 }
 
 setupVoiceInput({
+  speechSettings, showNotice: message => showMessage(message),
   button: voiceButton,
   status: voiceStatus,
   isAvailable: () => voiceAvailable() && ready && !busy && !document.querySelector("dialog[open]"),

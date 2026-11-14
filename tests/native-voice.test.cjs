@@ -170,3 +170,97 @@ test('abort while listener registration is pending does not start recording', as
   assert.equal(removed, true);
   assert.deepEqual(native.calls.map(([method]) => method), ['cancel']);
 });
+
+function cloudBoundary() {
+  const native = boundary();
+  const cancel = native.plugin.cancelRecording;
+  native.plugin.cancelRecording = async options => {
+    native.listeners.forEach(listener => listener({ sessionId: options.sessionId, error: 'CANCELLED' }));
+    await cancel(options);
+  };
+  native.plugin.stopRecordingForCloud = async options => {
+    native.calls.push(['pcm', options]); return { pcm: 'AAABAA==' };
+  };
+  return native;
+}
+
+test('cloud opt-in returns a final result then releases the retained native recording', async () => {
+  const { createNativeRecognition } = await adapter();
+  const native = cloudBoundary(), received = [];
+  const config = { enabled: true, appId: 'test', apiKey: 'key', apiSecret: 'secret' };
+  const recognition = new (createNativeRecognition(native.plugin, {
+    readConfig: async () => config,
+    recognizeCloud: async (pcm, credentials, { signal }) => {
+      assert.deepEqual([...pcm], [0, 0, 1, 0]); assert.deepEqual(credentials, config);
+      assert.equal(signal.aborted, false); return '午饭28元';
+    }
+  }))();
+  recognition.onresult = e => received.push(e.results[0][0].transcript);
+  recognition.start(); await tick(); native.started(); await tick(); recognition.stop(); await tick();
+  assert.deepEqual(received, ['午饭28元']);
+  assert.deepEqual(native.calls.map(([method]) => method), ['start', 'pcm', 'cancel']);
+  assert.equal(native.calls[0][1].cloud, true);
+  assert.equal(native.listeners.size, 0);
+});
+
+test('every cloud failure reuses exactly the same native recording for offline inference', async () => {
+  const { createNativeRecognition } = await adapter();
+  for (const code of ['CLOUD_FAILED', 'CLOUD_TIMEOUT', 'INVALID_KEY']) {
+    const native = cloudBoundary(), received = [], notices = [];
+    const recognition = new (createNativeRecognition(native.plugin, {
+      readConfig: async () => ({ enabled: true }),
+      recognizeCloud: async () => { throw Object.assign(new Error('private provider error'), { code }); }
+    }))();
+    recognition.onnotice = value => notices.push(value);
+    recognition.onresult = e => received.push(e.results[0][0].transcript);
+    recognition.start(); await tick(); native.started(); await tick(); recognition.stop(); await tick();
+    assert.deepEqual(native.calls.map(([method]) => method), ['start', 'pcm', 'stop']);
+    assert.equal(native.calls[0][1].sessionId, native.calls[2][1].sessionId);
+    native.recognized('奶茶12元'); await tick();
+    assert.deepEqual(received, ['奶茶12元']);
+    assert.equal(notices.length, 1);
+    assert.ok(!notices[0].includes('private'));
+  }
+});
+
+test('offline default and unreadable vault never call cloud and preserve native behavior', async () => {
+  const { createNativeRecognition } = await adapter();
+  for (const readConfig of [async () => ({ enabled: false }), async () => { throw new Error('lost keystore'); }]) {
+    const native = cloudBoundary(); let cloudCalls = 0;
+    const recognition = new (createNativeRecognition(native.plugin, { readConfig, recognizeCloud: async () => { cloudCalls++; } }))();
+    recognition.start(); await tick(); native.started(); await tick(); recognition.stop(); await tick(); native.recognized(''); await tick();
+    assert.equal(cloudCalls, 0);
+    assert.deepEqual(native.calls.map(([method]) => method), ['start', 'stop']);
+    assert.notEqual(native.calls[0][1].cloud, true);
+  }
+});
+
+test('aborting cloud recognition cancels upload, clears retained recording and never falls back', async () => {
+  const { createNativeRecognition } = await adapter();
+  const native = cloudBoundary(); let rejectCloud, signal, results = 0;
+  const recognition = new (createNativeRecognition(native.plugin, {
+    readConfig: async () => ({ enabled: true }),
+    recognizeCloud: async (_pcm, _config, options) => {
+      signal = options.signal; return new Promise((_resolve, reject) => { rejectCloud = reject; });
+    }
+  }))();
+  recognition.onresult = () => results++;
+  recognition.start(); await tick(); native.started(); await tick(); recognition.stop(); await tick();
+  recognition.abort(); rejectCloud(new Error('late cloud failure')); await tick();
+  assert.equal(signal.aborted, true);
+  assert.equal(results, 0);
+  assert.deepEqual(native.calls.map(([method]) => method), ['start', 'pcm', 'cancel']);
+});
+
+test('silent cloud capture finishes empty without network request or Whisper inference', async () => {
+  const { createNativeRecognition } = await adapter();
+  const native = cloudBoundary(); native.plugin.stopRecordingForCloud = async () => ({ pcm: '' });
+  let cloudCalls = 0, ends = 0;
+  const recognition = new (createNativeRecognition(native.plugin, {
+    readConfig: async () => ({ enabled: true }), recognizeCloud: async () => cloudCalls++
+  }))();
+  recognition.onend = () => ends++;
+  recognition.start(); await tick(); native.started(); await tick(); recognition.stop(); await tick();
+  assert.equal(cloudCalls, 0); assert.equal(ends, 1);
+  assert.deepEqual(native.calls.map(([method]) => method), ['start', 'cancel']);
+});

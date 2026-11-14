@@ -21,6 +21,9 @@ public final class PcmCaptureTest {
         float[] pcm = trailing.finish();
         check(pcm.length == 28800, "preserve PCM duration");
         check(Math.abs(pcm[0] - 2000f / 32768f) < 0.00001, "normalize PCM16");
+        byte[] cloud = PcmCapture.pcm16(new float[] { -1, 0, 2000f / 32768f, 32767f / 32768f });
+        check(java.util.Arrays.equals(cloud, new byte[] { 0, -128, 0, 0, -48, 7, -1, 127 }), "cloud PCM must be signed little-endian PCM16");
+        check(PcmCapture.pcm16(null).length == 0, "missing audio is silent");
 
         PcmCapture maximum = new PcmCapture();
         for (int i = 0; i < 1499; i++) check(!maximum.append(voice, 320), "premature max duration");

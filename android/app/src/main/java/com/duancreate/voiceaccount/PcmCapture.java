@@ -33,4 +33,15 @@ final class PcmCapture {
         Arrays.fill(samples, 0);
         return result;
     }
+
+    static byte[] pcm16(float[] audio) {
+        if (audio == null) return new byte[0];
+        byte[] result = new byte[audio.length * 2];
+        for (int i = 0; i < audio.length; i++) {
+            int sample = Math.max(-32768, Math.min(32767, Math.round(audio[i] * 32768f)));
+            result[i * 2] = (byte) sample;
+            result[i * 2 + 1] = (byte) (sample >> 8);
+        }
+        return result;
+    }
 }

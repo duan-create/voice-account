@@ -244,6 +244,26 @@
     </section>
     <section id="settings-view" class="full-screen-view" aria-labelledby="settings-title" hidden><div class="screen-content">
       <header class="section-heading"><button id="close-settings" class="icon-button" type="button" aria-label="返回设置前页面"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg></button><h2 id="settings-title">设置</h2></header>
+      <h3 class="module-heading">语音识别设置</h3>
+      <p id="speech-platform-note" class="storage-notice">双模式识别仅支持安卓 App；网页 / PWA 保持原有浏览器语音方式。</p>
+      <form id="speech-form" class="speech-settings" autocomplete="off" hidden>
+        <div class="form-field"><label for="speech-mode">识别模式</label><select id="speech-mode"><option value="offline">离线 Whisper（默认）</option><option value="cloud">讯飞云端优先 · 离线兜底</option></select></div>
+        <fieldset id="speech-cloud-fields" hidden disabled>
+          <p class="storage-notice">启用后，录音音频、APP_ID、API_KEY 与签名直连讯飞官方服务器；API_SECRET 仅在本机签名。不发送账单、账户或资产数据，不经过自有服务器。音频留存及处理以讯飞服务协议和隐私政策为准，本应用无法控制第三方留存。调用及连接测试可能消耗额度或产生费用。</p>
+          <p class="storage-notice"><a href="https://www.xfyun.cn/doc/asr/voicedictation/API.html" target="_blank" rel="noopener noreferrer">接口及服务说明</a> · <a href="https://www.xfyun.cn/privacy" target="_blank" rel="noopener noreferrer">讯飞隐私政策</a></p>
+          <div class="form-field"><label for="speech-app-id">APP_ID</label><input id="speech-app-id" name="appId" type="password" maxlength="128" autocapitalize="off" spellcheck="false" autocomplete="off" placeholder="填写或留空保留已存值"></div>
+          <div class="form-field"><label for="speech-api-key">API_KEY</label><input id="speech-api-key" name="apiKey" type="password" maxlength="128" autocapitalize="off" spellcheck="false" autocomplete="new-password" placeholder="填写或留空保留已存值"></div>
+          <div class="form-field"><label for="speech-api-secret">API_SECRET</label><input id="speech-api-secret" name="apiSecret" type="password" maxlength="128" autocapitalize="off" spellcheck="false" autocomplete="new-password" placeholder="填写或留空保留已存值"></div>
+          <p class="storage-notice">凭证使用设备 Keystore 加密，不进入账本备份。清除应用数据后需重新配置。</p>
+          <label class="speech-consent"><input id="speech-consent" type="checkbox">我了解云端音频处理与费用规则，同意本次配置或测试。</label>
+          <button id="speech-test" class="backup-button" type="button">测试连接</button>
+          <p class="storage-notice">测试只发送人工静音，不调用麦克风，不自动保存配置。热词请在对应 APPID 的讯飞控制台上传并发布，无需热词 ID。</p>
+          <p id="speech-hotwords" class="speech-hotwords">餐饮、交通、奶茶、外卖、工资、转账、支出、收入、购物、房租、学费、公交、地铁、奖金</p>
+          <button id="speech-copy-hotwords" class="backup-button" type="button">复制推荐热词</button>
+        </fieldset>
+        <div class="backup-section"><button id="speech-save" class="backup-button" type="submit">保存识别设置</button><button id="speech-clear" class="text-button" type="button">清除云端凭证</button></div>
+        <p id="speech-settings-status" class="storage-notice" role="status"></p>
+      </form>
       <h3 class="module-heading">备份与恢复</h3><p class="storage-notice">每次冷启动自动保存完整备份，保留最近3份。私有备份无法防止卸载、清除应用或网站数据造成的丢失。</p>
       <div class="backup-section"><button id="backup-now" class="backup-button" type="button">立即备份</button><button class="backup-button" type="button" data-export="json">导出完整备份</button><button id="choose-backup-directory" class="backup-button" type="button" hidden>授权公共备份目录</button></div>
       <p id="backup-directory-status" class="storage-notice"></p><p class="storage-notice">公共目录副本不上传网络。请在系统选择器中选本机专用文件夹；重装后可通过首页“导入 / 恢复”选择该目录的JSON文件。相同签名覆盖安装通常保留数据，升级前仍建议导出备份。</p>

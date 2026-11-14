@@ -5,6 +5,7 @@ import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
 import android.os.SystemClock;
+import android.util.Base64;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -38,6 +39,8 @@ public class WhisperPlugin extends Plugin {
         volatile boolean cancelled;
         volatile boolean stop;
         PluginCall resultCall;
+        boolean cloud;
+        boolean exported;
         float[] audio;
         String failure;
 
@@ -58,6 +61,7 @@ public class WhisperPlugin extends Plugin {
         if (id == null || id.isEmpty()) { call.reject("Missing session ID.", "INVALID_SESSION"); return; }
         if (destroyed || current != null) { call.reject("Local recognizer is busy.", "BUSY"); return; }
         current = new Session(id, sequence.incrementAndGet(), call);
+        current.cloud = Boolean.TRUE.equals(call.getBoolean("cloud", false));
         if (getPermissionState("microphone") != PermissionState.GRANTED) {
             requestPermissionForAlias("microphone", call, "microphonePermission");
         } else {
@@ -83,10 +87,12 @@ public class WhisperPlugin extends Plugin {
             boolean ready = false;
             try {
                 if (session.cancelled) return;
-                if (context == 0) context = WhisperNative.load(getContext().getAssets());
-                if (context == 0) throw new IllegalStateException("Model unavailable");
-                WhisperNative.begin(session.number);
-                if (session.cancelled) { WhisperNative.cancel(session.number); return; }
+                if (!session.cloud) {
+                    if (context == 0) context = WhisperNative.load(getContext().getAssets());
+                    if (context == 0) throw new IllegalStateException("Model unavailable");
+                    WhisperNative.begin(session.number);
+                }
+                if (session.cancelled) return;
                 ready = true;
                 int minimum = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
                 if (minimum <= 0) throw new IllegalStateException("Unsupported microphone format");
@@ -135,6 +141,32 @@ public class WhisperPlugin extends Plugin {
         });
     }
 
+    @PluginMethod
+    public synchronized void stopRecordingForCloud(PluginCall call) {
+        Session session = matching(call);
+        if (session == null) return;
+        if (!session.cloud || session.exported || session.resultCall != null) {
+            call.reject("Recording already consumed.", "BUSY"); return;
+        }
+        session.exported = true;
+        session.stop = true;
+        worker.execute(() -> {
+            byte[] pcm = null;
+            try {
+                if (session.cancelled) { call.reject("Recording cancelled.", "CANCELLED"); return; }
+                if (session.failure != null) { call.reject("Recording failed.", session.failure); return; }
+                pcm = PcmCapture.pcm16(session.audio);
+                JSObject result = new JSObject();
+                result.put("pcm", Base64.encodeToString(pcm, Base64.NO_WRAP));
+                if (session.cancelled) call.reject("Recording cancelled.", "CANCELLED");
+                else call.resolve(result);
+            } catch (Exception | OutOfMemoryError error) {
+                call.reject("Recording unavailable.", "AUDIO_CAPTURE");
+                synchronized (WhisperPlugin.this) { clear(session); }
+            } finally { if (pcm != null) Arrays.fill(pcm, (byte) 0); }
+        });
+    }
+
     private void notifyStopped(Session session) {
         JSObject event = new JSObject();
         event.put("sessionId", session.id);
@@ -155,6 +187,10 @@ public class WhisperPlugin extends Plugin {
                 if (session.failure != null) { call.reject("Recording failed.", session.failure); return; }
                 String text = "";
                 if (session.audio != null && session.audio.length > 0) {
+                    if (context == 0) context = WhisperNative.load(getContext().getAssets());
+                    if (context == 0) { call.reject("Model unavailable.", "MODEL_UNAVAILABLE"); return; }
+                    WhisperNative.begin(session.number);
+                    if (session.cancelled) { call.reject("Recording cancelled.", "CANCELLED"); return; }
                     byte[] result = WhisperNative.recognize(context, session.audio, session.number,
                         Math.max(1, Math.min(4, Runtime.getRuntime().availableProcessors())));
                     if (result != null) text = new String(result, StandardCharsets.UTF_8).trim();

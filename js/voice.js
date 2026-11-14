@@ -3,10 +3,10 @@ import { createNativeRecognition, isAndroidNative } from "./native-voice.js";
 import { enrichVoiceCategory } from './voice-category.js';
 import { CATEGORIES } from './finance.js';
 
-export function setupVoiceInput({ button, status, isAvailable, setActive, onDraft }) {
+export function setupVoiceInput({ button, status, isAvailable, setActive, onDraft, speechSettings, showNotice }) {
   const native = isAndroidNative();
   const Recognition = native
-    ? createNativeRecognition(window.Capacitor.registerPlugin("WhisperPlugin"))
+    ? createNativeRecognition(window.Capacitor.registerPlugin("WhisperPlugin"), { readConfig: speechSettings?.readConfig, recognizeCloud: speechSettings?.recognizeCloud })
     : window.SpeechRecognition || window.webkitSpeechRecognition;
   const label = button.querySelector("span");
   let session = null;
@@ -45,7 +45,7 @@ export function setupVoiceInput({ button, status, isAvailable, setActive, onDraf
     render("processing", "正在识别，请稍候...");
     // Permission and startup may finish after the user's finger has already lifted.
     if (current.started) current.recognition.stop();
-    current.timer = setTimeout(() => cancel("识别超时，请重试或使用手动记账。"), native ? 150000 : 15000);
+    current.timer = setTimeout(() => cancel("识别超时，请重试或使用手动记账。"), native ? 195000 : 15000);
   }
 
   function complete(current) {
@@ -72,6 +72,7 @@ export function setupVoiceInput({ button, status, isAvailable, setActive, onDraf
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
+    recognition.onnotice = message => { if (session === current) { status.textContent = message; showNotice?.(message); } };
     if (native) recognition.onprocessing = () => {
       if (session === current) render("processing", "正在识别，请稍候...");
     };
